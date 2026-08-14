@@ -4,7 +4,7 @@
  * Regulations valid as of August 2026
  */
 
-const CACHE_NAME = 'oman-air-ftl-v1.3.6'; // Added 55h 7-Day Duty Limit dashed line in Chart
+const CACHE_NAME = 'oman-air-ftl-v1.3.7'; // Auto-synthesize statutory Days Off between base duties in Logbooks
 const STATIC_ASSETS = [
   './',
   './index.html',

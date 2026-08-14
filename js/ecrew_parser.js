@@ -447,7 +447,7 @@ const eCrewParser = (() => {
     }));
 
     const sorted = cleaned.sort((a, b) => a.depTimeUtc.getTime() - b.depTimeUtc.getTime());
-    const duties = [];
+    const rawDuties = [];
     let currentSectors = [sorted[0]];
 
     for (let i = 1; i < sorted.length; i++) {
@@ -455,7 +455,7 @@ const eCrewParser = (() => {
       const prevSec = currentSectors[currentSectors.length - 1];
 
       if (prevSec.isDayOff || nextSec.isDayOff || prevSec.isStandby || nextSec.isStandby) {
-        duties.push(buildDutyPeriod(duties.length + 1, currentSectors));
+        rawDuties.push(buildDutyPeriod(rawDuties.length + 1, currentSectors));
         currentSectors = [nextSec];
         continue;
       }
@@ -466,16 +466,101 @@ const eCrewParser = (() => {
       if (gapHours < 8.0 && sameType) {
         currentSectors.push(nextSec);
       } else {
-        duties.push(buildDutyPeriod(duties.length + 1, currentSectors));
+        rawDuties.push(buildDutyPeriod(rawDuties.length + 1, currentSectors));
         currentSectors = [nextSec];
       }
     }
 
     if (currentSectors.length > 0) {
-      duties.push(buildDutyPeriod(duties.length + 1, currentSectors));
+      rawDuties.push(buildDutyPeriod(rawDuties.length + 1, currentSectors));
     }
 
-    return recalculateDutiesAnalysis(duties);
+    // Collect all existing explicit day off dates
+    const existingOffDates = new Set();
+    rawDuties.forEach(d => {
+      if (d.isDayOff) {
+        const dStr = d.firstDepUtc.toISOString().slice(0, 10);
+        existingOffDates.add(dStr);
+      }
+    });
+
+    // Auto-synthesize statutory Days Off between duties at base (MCT) for rest periods >= 34h (OM-A 7.1.5)
+    const fullDuties = [];
+    for (let i = 0; i < rawDuties.length; i++) {
+      fullDuties.push(rawDuties[i]);
+      if (i < rawDuties.length - 1) {
+        const cur = rawDuties[i];
+        const nxt = rawDuties[i + 1];
+
+        // Only evaluate when cur ends at MCT and nxt starts at MCT
+        const curEndAirport = (cur.sectors && cur.sectors.length) ? cur.sectors[cur.sectors.length - 1].arrAirport : 'MCT';
+        const nxtDepAirport = (nxt.sectors && nxt.sectors.length) ? nxt.sectors[0].depAirport : 'MCT';
+
+        if (curEndAirport === 'MCT' && nxtDepAirport === 'MCT') {
+          const curEnd = cur.checkoutTimeUtc.getTime();
+          const nxtRep = nxt.reportTimeUtc.getTime();
+          const restHours = (nxtRep - curEnd) / (3600 * 1000);
+
+          if (restHours >= 34.0) {
+            const curEndMctDate = new Date(curEnd + 4 * 3600 * 1000);
+            const nxtRepMctDate = new Date(nxtRep + 4 * 3600 * 1000);
+
+            let curDay = new Date(Date.UTC(curEndMctDate.getUTCFullYear(), curEndMctDate.getUTCMonth(), curEndMctDate.getUTCDate() + 1));
+            const lastDay = new Date(Date.UTC(nxtRepMctDate.getUTCFullYear(), nxtRepMctDate.getUTCMonth(), nxtRepMctDate.getUTCDate()));
+
+            while (curDay < lastDay) {
+              const dateStr = curDay.toISOString().slice(0, 10);
+              if (!existingOffDates.has(dateStr)) {
+                existingOffDates.add(dateStr);
+                const offStartUtc = new Date(curDay.getTime() - 4 * 3600 * 1000);
+                const offEndUtc = new Date(offStartUtc.getTime() + 24 * 3600 * 1000);
+
+                fullDuties.push({
+                  dutyId: 0,
+                  sectors: [{
+                    dateStr: dateStr,
+                    depAirport: 'MCT',
+                    arrAirport: 'MCT',
+                    depTimeUtc: offStartUtc,
+                    arrTimeUtc: offEndUtc,
+                    flightTimeMinutes: 0,
+                    acType: '',
+                    reg: '',
+                    picName: 'Day Off',
+                    isSimulator: false,
+                    isDayOff: true,
+                    isStandby: false,
+                    dutyCode: 'OFF'
+                  }],
+                  isSimulator: false,
+                  isDayOff: true,
+                  isStandby: false,
+                  reportTimeUtc: offStartUtc,
+                  firstDepUtc: offStartUtc,
+                  lastArrUtc: offEndUtc,
+                  checkoutTimeUtc: offEndUtc,
+                  fdpDurationMinutes: 0,
+                  dutyDurationMinutes: 0,
+                  flightTimeMinutes: 0,
+                  sectorCount: 0,
+                  factoredSectors: 0,
+                  summaryRoute: 'DAY OFF',
+                  violations: [],
+                  warnings: [],
+                  status: 'OFF'
+                });
+              }
+              curDay = new Date(curDay.getTime() + 24 * 3600 * 1000);
+            }
+          }
+        }
+      }
+    }
+
+    fullDuties.sort((a, b) => a.firstDepUtc.getTime() - b.firstDepUtc.getTime());
+    fullDuties.forEach((d, idx) => d.dutyId = idx + 1);
+
+    return recalculateDutiesAnalysis(fullDuties);
   }
 
   function buildDutyPeriod(dutyId, sectors) {
