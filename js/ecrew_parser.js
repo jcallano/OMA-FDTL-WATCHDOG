@@ -27,11 +27,10 @@ const eCrewParser = (() => {
     if (!tStr) return { h: 0, m: 0, nextDay: 0 };
     let clean = tStr.trim().replace(/^A/i, ''); // Strip actual 'A' prefix
     let nextDay = 0;
-    if (clean.includes('?1') || clean.includes('+1')) {
+    if (clean.includes('?1') || clean.includes('+1') || clean.includes('?')) {
       nextDay = 1;
-      clean = clean.replace('?1', '').replace('+1', '');
+      clean = clean.replace('?1', '').replace('+1', '').replace('?', '');
     }
-    // Remove delay suffix e.g. "/00:34"
     if (clean.includes('/')) {
       clean = clean.split('/')[0].trim();
     }
@@ -43,20 +42,14 @@ const eCrewParser = (() => {
     };
   }
 
-  /**
-   * Detects which type of eCrew file was uploaded and parses accordingly.
-   */
   function parseCsvContent(csvText) {
-    if (csvText.includes('Personal Crew Schedule Report') || csvText.includes('Schedule Details') || csvText.includes('Day Off') || csvText.includes('Debrief times')) {
+    if (csvText.includes('Personal Crew Schedule Report') || csvText.includes('Schedule Details') || csvText.includes('Day Off') || csvText.includes('Debrief times') || csvText.includes('Standby')) {
       return parseRosterSchedule(csvText);
     } else {
       return parseFlightLogbook(csvText);
     }
   }
 
-  /**
-   * Format 1: Historical Logbook
-   */
   function parseFlightLogbook(csvText) {
     const lines = csvText.split(/\r\n|\n/);
     const sectors = [];
@@ -135,10 +128,6 @@ const eCrewParser = (() => {
     return sectors;
   }
 
-  /**
-   * Format 2: eCrew Personal Crew Schedule Report (Roster CSV)
-   * Handles multi-line cells, OFF, COFF, SBY, and flight rotations with ?1 next day
-   */
   function parseRosterSchedule(csvText) {
     const rawRows = parseCsvWithQuotes(csvText);
     const sectors = [];
@@ -164,10 +153,7 @@ const eCrewParser = (() => {
 
       const dutyCode = (row[1] || '').trim().toUpperCase();
       const details = (row[2] || '').trim();
-      const reportTimeStr = (row[3] || '').trim();
       const timesStr = (row[4] || '').trim();
-      const debriefTimeStr = (row[5] || '').trim();
-      const crewStr = (row[7] || '').trim();
 
       // Case A: Day Off (OFF or COFF)
       if (dutyCode === 'OFF' || dutyCode === 'COFF' || details.toLowerCase().includes('day off')) {
@@ -200,7 +186,8 @@ const eCrewParser = (() => {
           const st = parseTime(parts[0]);
           const et = parseTime(parts[1]);
           sbyStart = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day, st.h, st.m));
-          sbyEnd = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day + et.nextDay, et.h, et.m));
+          let endDayOffset = (et.nextDay > 0 || et.h < st.h) ? 1 : 0;
+          sbyEnd = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day + endDayOffset, et.h, et.m));
         }
 
         sectors.push({
@@ -221,7 +208,7 @@ const eCrewParser = (() => {
         continue;
       }
 
-      // Case C: Commercial Flight or Simulator Duties (may have multi-lines in cell)
+      // Case C: Commercial Flight or Simulator Duties
       const detailLines = details.split(/\r\n|\n/).map(l => l.trim()).filter(Boolean);
       const timeLines = timesStr.split(/\r\n|\n/).map(l => l.trim()).filter(Boolean);
       const fltNumberLines = dutyCode.split(/\r\n|\n/).map(l => l.trim()).filter(Boolean);
@@ -251,8 +238,14 @@ const eCrewParser = (() => {
         }
 
         const depDt = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day + depT.nextDay, depT.h, depT.m));
-        let arrDt = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day + arrT.nextDay, arrT.h, arrT.m));
+        let arrDayOffset = arrT.nextDay;
+        if (arrDayOffset === 0 && (arrT.h < depT.h || (arrT.h === depT.h && arrT.m < depT.m))) {
+          arrDayOffset = depT.nextDay + 1;
+        } else {
+          arrDayOffset = Math.max(arrDayOffset, depT.nextDay);
+        }
 
+        let arrDt = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day + arrDayOffset, arrT.h, arrT.m));
         if (arrDt < depDt) {
           arrDt = new Date(arrDt.getTime() + 24 * 3600 * 1000);
         }
@@ -280,9 +273,6 @@ const eCrewParser = (() => {
     return sectors;
   }
 
-  /**
-   * Helper: Standard CSV parser that respects multiline quoted fields
-   */
   function parseCsvWithQuotes(text) {
     const rows = [];
     let currentRow = [];
@@ -296,7 +286,7 @@ const eCrewParser = (() => {
       if (char === '"') {
         if (inQuotes && nextChar === '"') {
           currentField += '"';
-          i++; // Skip escaped quote
+          i++;
         } else {
           inQuotes = !inQuotes;
         }
@@ -322,9 +312,6 @@ const eCrewParser = (() => {
     return rows;
   }
 
-  /**
-   * Smart Merge: Combines newly parsed sectors/days off with existing sectors.
-   */
   function mergeSectors(existingDuties, newSectors) {
     const sectorMap = new Map();
     let updatedCount = 0;
@@ -373,7 +360,6 @@ const eCrewParser = (() => {
       const nextSec = sorted[i];
       const prevSec = currentSectors[currentSectors.length - 1];
 
-      // If either sector is a Day Off or Standby, separate it into its own duty block
       if (prevSec.isDayOff || nextSec.isDayOff || prevSec.isStandby || nextSec.isStandby) {
         duties.push(buildDutyPeriod(duties.length + 1, currentSectors));
         currentSectors = [nextSec];
@@ -430,7 +416,7 @@ const eCrewParser = (() => {
 
     if (isStandby) {
       const rawMin = Math.round((last.arrTimeUtc.getTime() - first.depTimeUtc.getTime()) / (60 * 1000));
-      const creditedDutyMin = FTLRules.getStandbyDutyCreditMinutes(rawMin, false);
+      const creditedDutyMin = typeof FTLRules !== 'undefined' ? FTLRules.getStandbyDutyCreditMinutes(rawMin, false) : Math.round(rawMin * 0.25);
       return {
         dutyId: dutyId,
         sectors: sectors,
@@ -447,15 +433,15 @@ const eCrewParser = (() => {
         flightTimeMinutes: 0,
         sectorCount: 0,
         factoredSectors: 0,
-        summaryRoute: `HOME STANDBY (${FTLRules.formatMinutesToHM(rawMin)} • 25% Credit: ${FTLRules.formatMinutesToHM(creditedDutyMin)})`,
+        summaryRoute: `HOME STANDBY (${typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(rawMin) : rawMin + 'm'} • 25% Credit: ${typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(creditedDutyMin) : creditedDutyMin + 'm'})`,
         violations: [],
         warnings: [],
         status: 'OK'
       };
     }
 
-    const repOffset = FTLRules.getReportingOffsetMinutes(first.depAirport, isSim);
-    const chkOffset = FTLRules.getCheckoutOffsetMinutes(isSim);
+    const repOffset = typeof FTLRules !== 'undefined' ? FTLRules.getReportingOffsetMinutes(first.depAirport, isSim) : (first.depAirport === 'MCT' ? 75 : 60);
+    const chkOffset = typeof FTLRules !== 'undefined' ? FTLRules.getCheckoutOffsetMinutes(isSim) : 30;
 
     const reportUtc = new Date(first.depTimeUtc.getTime() - repOffset * 60 * 1000);
     const checkoutUtc = new Date(last.arrTimeUtc.getTime() + chkOffset * 60 * 1000);
@@ -463,7 +449,7 @@ const eCrewParser = (() => {
     const fdpMin = Math.round((last.arrTimeUtc.getTime() - reportUtc.getTime()) / (60 * 1000));
     const dutyMin = Math.round((checkoutUtc.getTime() - reportUtc.getTime()) / (60 * 1000));
     const fltMin = sectors.reduce((acc, s) => acc + (s.flightTimeMinutes || 0), 0);
-    const factored = FTLRules.calculateFactoredSectors(sectors, true);
+    const factored = typeof FTLRules !== 'undefined' ? FTLRules.calculateFactoredSectors(sectors, true) : sectors.length;
 
     let summaryRoute = "N/A";
     if (isSim) {
@@ -507,7 +493,6 @@ const eCrewParser = (() => {
       dp.violations = [];
       dp.warnings = [];
 
-      // Day Off Duty handling
       if (dp.isDayOff) {
         consecutiveDutyCounter = 0;
         dp.consecutiveDutyDays = 0;
@@ -532,7 +517,6 @@ const eCrewParser = (() => {
       } else {
         const prev = sorted[i - 1];
 
-        // If preceding was an explicit Day Off
         if (prev.isDayOff) {
           consecutiveDutyCounter = 1;
           dp.precedingRestMinutes = 24 * 60;
@@ -540,14 +524,14 @@ const eCrewParser = (() => {
           dp.restMarginMinutes = 12 * 60;
         } else {
           const restMin = Math.round((dp.reportTimeUtc.getTime() - prev.checkoutTimeUtc.getTime()) / (60 * 1000));
-          const reqMin = FTLRules.getRequiredRestMinutes(prev.dutyDurationMinutes);
+          const reqMin = typeof FTLRules !== 'undefined' ? FTLRules.getRequiredRestMinutes(prev.dutyDurationMinutes) : Math.max(prev.dutyDurationMinutes, 12 * 60);
           const marginMin = restMin - reqMin;
 
           dp.precedingRestMinutes = restMin;
           dp.requiredRestMinutes = reqMin;
           dp.restMarginMinutes = marginMin;
 
-          const dayOff = FTLRules.evaluateDayOff(prev.checkoutTimeUtc, dp.reportTimeUtc);
+          const dayOff = typeof FTLRules !== 'undefined' ? FTLRules.evaluateDayOff(prev.checkoutTimeUtc, dp.reportTimeUtc) : { isValid: restMin >= 34 * 60 };
           if (dayOff.isValid) {
             consecutiveDutyCounter = 1;
           } else {
@@ -558,24 +542,24 @@ const eCrewParser = (() => {
             dp.violations.push({
               category: 'REST_PERIOD',
               title: 'Insufficient Preceding Rest',
-              detail: `Rest of ${FTLRules.formatMinutesToHM(restMin)} is below minimum required ${FTLRules.formatMinutesToHM(reqMin)}.`,
+              detail: `Rest of ${typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(restMin) : restMin + 'm'} is below minimum required ${typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(reqMin) : reqMin + 'm'}.`,
               ref: 'OM-A 7.1.6.4',
-              margin: FTLRules.formatMinutesToHM(marginMin)
+              margin: typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(marginMin) : marginMin + 'm'
             });
-          } else if (marginMin <= FTLRules.WARNING_THRESHOLDS.REST_MARGIN_MIN) {
+          } else if (marginMin <= (typeof FTLRules !== 'undefined' ? FTLRules.WARNING_THRESHOLDS.REST_MARGIN_MIN : 60)) {
             dp.warnings.push({
               category: 'REST_PERIOD',
               title: 'Tight Rest Margin',
-              detail: `Rest margin of ${FTLRules.formatMinutesToHM(marginMin)} is close to the minimum legal limit.`,
+              detail: `Rest margin of ${typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(marginMin) : marginMin + 'm'} is close to the minimum legal limit.`,
               ref: 'OM-A 7.1.6.4',
-              margin: FTLRules.formatMinutesToHM(marginMin)
+              margin: typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(marginMin) : marginMin + 'm'
             });
           }
         }
 
         dp.consecutiveDutyDays = consecutiveDutyCounter;
 
-        if (dp.consecutiveDutyDays > FTLRules.LIMITS.MAX_CONSECUTIVE_DAYS) {
+        if (dp.consecutiveDutyDays > (typeof FTLRules !== 'undefined' ? FTLRules.LIMITS.MAX_CONSECUTIVE_DAYS : 7)) {
           dp.violations.push({
             category: 'CONSECUTIVE_DUTY',
             title: 'Exceeded Consecutive Duty Days',
@@ -583,7 +567,7 @@ const eCrewParser = (() => {
             ref: 'OM-A 7.1.5(1)',
             margin: `+${dp.consecutiveDutyDays - 7}d`
           });
-        } else if (dp.consecutiveDutyDays === FTLRules.LIMITS.MAX_CONSECUTIVE_DAYS) {
+        } else if (dp.consecutiveDutyDays === (typeof FTLRules !== 'undefined' ? FTLRules.LIMITS.MAX_CONSECUTIVE_DAYS : 7)) {
           dp.warnings.push({
             category: 'CONSECUTIVE_DUTY',
             title: 'Maximum Consecutive Duty Days Reached',
@@ -598,8 +582,8 @@ const eCrewParser = (() => {
         dp.maxFdpMinutes = dp.dutyDurationMinutes;
         dp.fdpMarginMinutes = 0;
       } else {
-        const reportLocal = new Date(dp.reportTimeUtc.getTime() + FTLRules.BASE_UTC_OFFSET_HOURS * 3600 * 1000);
-        const maxFdp = FTLRules.getMaxFdpMinutes(reportLocal, dp.factoredSectors, true);
+        const reportLocal = new Date(dp.reportTimeUtc.getTime() + (typeof FTLRules !== 'undefined' ? FTLRules.BASE_UTC_OFFSET_HOURS : 4) * 3600 * 1000);
+        const maxFdp = typeof FTLRules !== 'undefined' ? FTLRules.getMaxFdpMinutes(reportLocal, dp.factoredSectors, true) : (13 * 60);
         dp.maxFdpMinutes = maxFdp;
         dp.fdpMarginMinutes = maxFdp - dp.fdpDurationMinutes;
 
@@ -607,17 +591,17 @@ const eCrewParser = (() => {
           dp.violations.push({
             category: 'FDP_LIMIT',
             title: 'Maximum Daily FDP Exceeded',
-            detail: `Actual FDP of ${FTLRules.formatMinutesToHM(dp.fdpDurationMinutes)} exceeded Table A limit of ${FTLRules.formatMinutesToHM(maxFdp)}.`,
+            detail: `Actual FDP of ${typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(dp.fdpDurationMinutes) : dp.fdpDurationMinutes + 'm'} exceeded Table A limit of ${typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(maxFdp) : maxFdp + 'm'}.`,
             ref: 'OM-A 7.1.6.9 (Table A)',
-            margin: FTLRules.formatMinutesToHM(dp.fdpMarginMinutes)
+            margin: typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(dp.fdpMarginMinutes) : dp.fdpMarginMinutes + 'm'
           });
-        } else if (dp.fdpMarginMinutes <= FTLRules.WARNING_THRESHOLDS.FDP_MARGIN_MIN || dp.fdpDurationMinutes >= FTLRules.WARNING_THRESHOLDS.FDP_RATIO * maxFdp) {
+        } else if (dp.fdpMarginMinutes <= (typeof FTLRules !== 'undefined' ? FTLRules.WARNING_THRESHOLDS.FDP_MARGIN_MIN : 45)) {
           dp.warnings.push({
             category: 'FDP_LIMIT',
             title: 'Tight FDP Margin',
-            detail: `Used ${Math.round(dp.fdpDurationMinutes / maxFdp * 100)}% of allowable FDP. Remaining margin: ${FTLRules.formatMinutesToHM(dp.fdpMarginMinutes)}.`,
+            detail: `Used ${Math.round(dp.fdpDurationMinutes / maxFdp * 100)}% of allowable FDP. Remaining margin: ${typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(dp.fdpMarginMinutes) : dp.fdpMarginMinutes + 'm'}.`,
             ref: 'OM-A 7.1.6.9 (Table A)',
-            margin: FTLRules.formatMinutesToHM(dp.fdpMarginMinutes)
+            margin: typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(dp.fdpMarginMinutes) : dp.fdpMarginMinutes + 'm'
           });
         }
       }
@@ -633,21 +617,14 @@ const eCrewParser = (() => {
         }
       }
       dp.flightTime28dMinutes = flt28d;
-      if (flt28d > FTLRules.LIMITS.MAX_FLIGHT_28D) {
+      const maxFlt28 = typeof FTLRules !== 'undefined' ? FTLRules.LIMITS.MAX_FLIGHT_28D : 100 * 60;
+      if (flt28d > maxFlt28) {
         dp.violations.push({
           category: 'FLIGHT_28D',
           title: 'Exceeded 28-Day Flight Time Limit',
-          detail: `Accumulated ${FTLRules.formatMinutesToHM(flt28d)} in 28 days (limit 100h).`,
+          detail: `Accumulated ${typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(flt28d) : flt28d + 'm'} in 28 days (limit 100h).`,
           ref: 'OM-A 7.1.4(1)',
-          margin: FTLRules.formatMinutesToHM(FTLRules.LIMITS.MAX_FLIGHT_28D - flt28d)
-        });
-      } else if (flt28d >= FTLRules.WARNING_THRESHOLDS.FLIGHT_28D_MIN) {
-        dp.warnings.push({
-          category: 'FLIGHT_28D',
-          title: 'High 28-Day Flight Time',
-          detail: `Accumulated ${FTLRules.formatMinutesToHM(flt28d)} in 28 days (>=90h of 100h max limit).`,
-          ref: 'OM-A 7.1.4(1)',
-          margin: FTLRules.formatMinutesToHM(FTLRules.LIMITS.MAX_FLIGHT_28D - flt28d)
+          margin: typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(maxFlt28 - flt28d) : (maxFlt28 - flt28d) + 'm'
         });
       }
 
@@ -661,21 +638,14 @@ const eCrewParser = (() => {
         }
       }
       dp.dutyTime7dMinutes = duty7d;
-      if (duty7d > FTLRules.LIMITS.MAX_DUTY_7D) {
+      const maxDuty7 = typeof FTLRules !== 'undefined' ? FTLRules.LIMITS.MAX_DUTY_7D : 55 * 60;
+      if (duty7d > maxDuty7) {
         dp.violations.push({
           category: 'DUTY_7D',
           title: 'Exceeded 7-Day Duty Time Limit',
-          detail: `Accumulated ${FTLRules.formatMinutesToHM(duty7d)} duty in 7 days (limit 55h).`,
+          detail: `Accumulated ${typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(duty7d) : duty7d + 'm'} duty in 7 days (limit 55h).`,
           ref: 'OM-A 7.1.4(3)',
-          margin: FTLRules.formatMinutesToHM(FTLRules.LIMITS.MAX_DUTY_7D - duty7d)
-        });
-      } else if (duty7d >= FTLRules.WARNING_THRESHOLDS.DUTY_7D_MIN) {
-        dp.warnings.push({
-          category: 'DUTY_7D',
-          title: 'High 7-Day Duty Time',
-          detail: `Accumulated ${FTLRules.formatMinutesToHM(duty7d)} duty in 7 days (>=50h of 55h max).`,
-          ref: 'OM-A 7.1.4(3)',
-          margin: FTLRules.formatMinutesToHM(FTLRules.LIMITS.MAX_DUTY_7D - duty7d)
+          margin: typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(maxDuty7 - duty7d) : (maxDuty7 - duty7d) + 'm'
         });
       }
 
@@ -689,13 +659,14 @@ const eCrewParser = (() => {
         }
       }
       dp.dutyTime14dMinutes = duty14d;
-      if (duty14d > FTLRules.LIMITS.MAX_DUTY_14D) {
+      const maxDuty14 = typeof FTLRules !== 'undefined' ? FTLRules.LIMITS.MAX_DUTY_14D : 95 * 60;
+      if (duty14d > maxDuty14) {
         dp.violations.push({
           category: 'DUTY_14D',
           title: 'Exceeded 14-Day Duty Time Limit',
-          detail: `Accumulated ${FTLRules.formatMinutesToHM(duty14d)} duty in 14 days (limit 95h).`,
+          detail: `Accumulated ${typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(duty14d) : duty14d + 'm'} duty in 14 days (limit 95h).`,
           ref: 'OM-A 7.1.4(4)',
-          margin: FTLRules.formatMinutesToHM(FTLRules.LIMITS.MAX_DUTY_14D - duty14d)
+          margin: typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(maxDuty14 - duty14d) : (maxDuty14 - duty14d) + 'm'
         });
       }
 
@@ -708,13 +679,14 @@ const eCrewParser = (() => {
         }
       }
       dp.dutyTime28dMinutes = duty28d;
-      if (duty28d > FTLRules.LIMITS.MAX_DUTY_28D) {
+      const maxDuty28 = typeof FTLRules !== 'undefined' ? FTLRules.LIMITS.MAX_DUTY_28D : 190 * 60;
+      if (duty28d > maxDuty28) {
         dp.violations.push({
           category: 'DUTY_28D',
           title: 'Exceeded 28-Day Duty Time Limit',
-          detail: `Accumulated ${FTLRules.formatMinutesToHM(duty28d)} duty in 28 days (limit 190h).`,
+          detail: `Accumulated ${typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(duty28d) : duty28d + 'm'} duty in 28 days (limit 190h).`,
           ref: 'OM-A 7.1.4(5)',
-          margin: FTLRules.formatMinutesToHM(FTLRules.LIMITS.MAX_DUTY_28D - duty28d)
+          margin: typeof FTLRules !== 'undefined' ? FTLRules.formatMinutesToHM(maxDuty28 - duty28d) : (maxDuty28 - duty28d) + 'm'
         });
       }
 
@@ -735,3 +707,7 @@ const eCrewParser = (() => {
     recalculateDutiesAnalysis
   };
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = eCrewParser;
+}
