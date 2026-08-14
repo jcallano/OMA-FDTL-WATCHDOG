@@ -159,6 +159,26 @@ const FTLRules = (() => {
     return { isValid: true, consecutiveDays: daysCount };
   }
 
+  function getStandbyDutyCreditMinutes(durationMinutes, isAirportStandby = false) {
+    if (!durationMinutes || durationMinutes <= 0) return 0;
+    if (isAirportStandby) {
+      return Math.round(durationMinutes); // 100% for Airport Standby (OM-A 7.1.7.3)
+    }
+    // 25% of time spent on Home Standby counts as duty time for OM-A 7.1.4 cumulative limits (OM-A 7.1.7.8.c)
+    return Math.round(durationMinutes * 0.25);
+  }
+
+  function getStandbyFdpReductionMinutes(standbyDurationMinutes, isAirportStandby = false) {
+    if (!standbyDurationMinutes || standbyDurationMinutes <= 0) return 0;
+    if (isAirportStandby) {
+      // Reduced by any time in excess of 4 hours (OM-A 7.1.7.4.a)
+      return Math.max(0, standbyDurationMinutes - (4 * 60));
+    } else {
+      // Reduced by any time in excess of 6 hours (OM-A 7.1.7.8.g)
+      return Math.max(0, standbyDurationMinutes - (6 * 60));
+    }
+  }
+
   return {
     BASE_AIRPORT,
     BASE_UTC_OFFSET_HOURS,
@@ -172,6 +192,8 @@ const FTLRules = (() => {
     calculateFactoredSectors,
     getMaxFdpMinutes,
     getRequiredRestMinutes,
+    getStandbyDutyCreditMinutes,
+    getStandbyFdpReductionMinutes,
     evaluateDayOff
   };
 })();

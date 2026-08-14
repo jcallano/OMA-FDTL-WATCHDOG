@@ -4,7 +4,7 @@
  * Regulations valid as of August 2026
  */
 
-const CACHE_NAME = 'oman-air-ftl-v1.2.1'; // Incremented for hover card & duty days update
+const CACHE_NAME = 'oman-air-ftl-v1.2.3'; // Standby 25% Duty Credit (OM-A 7.1.7.8.c)
 const STATIC_ASSETS = [
   './',
   './index.html',

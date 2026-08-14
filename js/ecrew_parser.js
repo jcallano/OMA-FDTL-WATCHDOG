@@ -1,13 +1,18 @@
 /**
- * Client-Side eCrew Logbook Parser & Duty Grouping Engine
- * Supports Intelligent Merging, Deduplication & Updates
+ * Client-Side eCrew Logbook & Schedule Report Parser
+ * Supports:
+ * 1. eCrew Flight Logbook CSV (Historical Flight Logs)
+ * 2. eCrew Personal Crew Schedule Report (Roster CSV with OFF, SBY, COFF, Multi-line Sectors, ?1 next day)
+ * 3. Intelligent Merging & Day-Off Tracking (OM-A 7.1.5)
+ * Regulations valid as of August 2026
  */
 
 const eCrewParser = (() => {
 
   function parseDate(dStr) {
     if (!dStr) return null;
-    const parts = dStr.trim().split('/');
+    const clean = dStr.trim().split(' ')[0]; // removes day name like "Sat", "Sun"
+    const parts = clean.split('/');
     if (parts.length === 3) {
       let day = parseInt(parts[0], 10);
       let month = parseInt(parts[1], 10) - 1;
@@ -19,15 +24,40 @@ const eCrewParser = (() => {
   }
 
   function parseTime(tStr) {
-    if (!tStr) return { h: 0, m: 0 };
-    const parts = tStr.trim().split(':');
+    if (!tStr) return { h: 0, m: 0, nextDay: 0 };
+    let clean = tStr.trim().replace(/^A/i, ''); // Strip actual 'A' prefix
+    let nextDay = 0;
+    if (clean.includes('?1') || clean.includes('+1')) {
+      nextDay = 1;
+      clean = clean.replace('?1', '').replace('+1', '');
+    }
+    // Remove delay suffix e.g. "/00:34"
+    if (clean.includes('/')) {
+      clean = clean.split('/')[0].trim();
+    }
+    const parts = clean.split(':');
     return {
       h: parseInt(parts[0] || '0', 10),
-      m: parseInt(parts[1] || '0', 10)
+      m: parseInt(parts[1] || '0', 10),
+      nextDay: nextDay
     };
   }
 
+  /**
+   * Detects which type of eCrew file was uploaded and parses accordingly.
+   */
   function parseCsvContent(csvText) {
+    if (csvText.includes('Personal Crew Schedule Report') || csvText.includes('Schedule Details') || csvText.includes('Day Off') || csvText.includes('Debrief times')) {
+      return parseRosterSchedule(csvText);
+    } else {
+      return parseFlightLogbook(csvText);
+    }
+  }
+
+  /**
+   * Format 1: Historical Logbook
+   */
+  function parseFlightLogbook(csvText) {
     const lines = csvText.split(/\r\n|\n/);
     const sectors = [];
 
@@ -39,7 +69,7 @@ const eCrewParser = (() => {
       if (row.length < 5) continue;
 
       const firstCol = row[0];
-      if (!/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(firstCol)) continue;
+      if (!/^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(firstCol)) continue;
 
       const dateObj = parseDate(firstCol);
       if (!dateObj) continue;
@@ -55,9 +85,9 @@ const eCrewParser = (() => {
       const arrT = parseTime(arrTimeStr);
 
       const depDt = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day, depT.h, depT.m));
-      let arrDt = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day, arrT.h, arrT.m));
+      let arrDt = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day + arrT.nextDay, arrT.h, arrT.m));
 
-      if (arrDt < depDt) {
+      if (arrDt < depDt && arrT.nextDay === 0) {
         arrDt = new Date(arrDt.getTime() + 24 * 3600 * 1000);
       }
 
@@ -86,7 +116,7 @@ const eCrewParser = (() => {
       }
 
       sectors.push({
-        dateStr: firstCol,
+        dateStr: firstCol.split(' ')[0],
         depAirport: depApt,
         arrAirport: arrApt,
         depTimeUtc: depDt,
@@ -96,7 +126,9 @@ const eCrewParser = (() => {
         reg: reg,
         picName: picName,
         isSimulator: isSim,
-        simType: simType
+        simType: simType,
+        isDayOff: false,
+        isStandby: false
       });
     }
 
@@ -104,32 +136,213 @@ const eCrewParser = (() => {
   }
 
   /**
-   * Smart Merge: Combines newly parsed sectors with existing sectors.
-   * Updates overlapping flights with the newest data and adds new flights without duplicating.
+   * Format 2: eCrew Personal Crew Schedule Report (Roster CSV)
+   * Handles multi-line cells, OFF, COFF, SBY, and flight rotations with ?1 next day
+   */
+  function parseRosterSchedule(csvText) {
+    const rawRows = parseCsvWithQuotes(csvText);
+    const sectors = [];
+    let startParsing = false;
+
+    for (let i = 0; i < rawRows.length; i++) {
+      const row = rawRows[i];
+      if (!row || row.length === 0) continue;
+
+      const col0 = (row[0] || '').trim();
+      if (col0.toLowerCase() === 'date' && (row[1] || '').toLowerCase().includes('duties')) {
+        startParsing = true;
+        continue;
+      }
+      if (col0.includes('Total Hours') || col0.includes('Hotel Information') || col0.includes('Descriptions')) {
+        startParsing = false;
+        break;
+      }
+      if (!startParsing) continue;
+
+      const dateObj = parseDate(col0);
+      if (!dateObj) continue;
+
+      const dutyCode = (row[1] || '').trim().toUpperCase();
+      const details = (row[2] || '').trim();
+      const reportTimeStr = (row[3] || '').trim();
+      const timesStr = (row[4] || '').trim();
+      const debriefTimeStr = (row[5] || '').trim();
+      const crewStr = (row[7] || '').trim();
+
+      // Case A: Day Off (OFF or COFF)
+      if (dutyCode === 'OFF' || dutyCode === 'COFF' || details.toLowerCase().includes('day off')) {
+        const offDate = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day, 0, 0));
+        sectors.push({
+          dateStr: col0.split(' ')[0],
+          depAirport: 'MCT',
+          arrAirport: 'MCT',
+          depTimeUtc: offDate,
+          arrTimeUtc: new Date(offDate.getTime() + 24 * 3600 * 1000),
+          flightTimeMinutes: 0,
+          acType: '',
+          reg: '',
+          picName: dutyCode === 'COFF' ? 'Compensated Day Off' : 'Day Off',
+          isSimulator: false,
+          isDayOff: true,
+          isStandby: false,
+          dutyCode: dutyCode
+        });
+        continue;
+      }
+
+      // Case B: Home Standby (SBY)
+      if (dutyCode === 'SBY' || details.toLowerCase().includes('standby')) {
+        let sbyStart = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day, 0, 0));
+        let sbyEnd = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day, 8, 0));
+
+        if (timesStr && timesStr.includes('-')) {
+          const parts = timesStr.split('-');
+          const st = parseTime(parts[0]);
+          const et = parseTime(parts[1]);
+          sbyStart = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day, st.h, st.m));
+          sbyEnd = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day + et.nextDay, et.h, et.m));
+        }
+
+        sectors.push({
+          dateStr: col0.split(' ')[0],
+          depAirport: 'MCT',
+          arrAirport: 'MCT',
+          depTimeUtc: sbyStart,
+          arrTimeUtc: sbyEnd,
+          flightTimeMinutes: 0,
+          acType: 'SBY',
+          reg: '',
+          picName: 'Home Standby',
+          isSimulator: false,
+          isDayOff: false,
+          isStandby: true,
+          dutyCode: 'SBY'
+        });
+        continue;
+      }
+
+      // Case C: Commercial Flight or Simulator Duties (may have multi-lines in cell)
+      const detailLines = details.split(/\r\n|\n/).map(l => l.trim()).filter(Boolean);
+      const timeLines = timesStr.split(/\r\n|\n/).map(l => l.trim()).filter(Boolean);
+      const fltNumberLines = dutyCode.split(/\r\n|\n/).map(l => l.trim()).filter(Boolean);
+
+      const numSectors = Math.max(detailLines.length, timeLines.length, 1);
+
+      for (let sIdx = 0; sIdx < numSectors; sIdx++) {
+        const dLine = detailLines[sIdx] || detailLines[0] || 'MCT - MCT';
+        const tLine = timeLines[sIdx] || timeLines[0] || '08:00 - 10:00';
+        const fltNum = fltNumberLines[sIdx] || fltNumberLines[0] || 'WY';
+
+        let depApt = 'MCT';
+        let arrApt = 'MCT';
+        if (dLine.includes('-')) {
+          const apts = dLine.split('-').map(a => a.trim().toUpperCase());
+          depApt = apts[0] || 'MCT';
+          arrApt = apts[1] || 'MCT';
+        }
+
+        let depT = { h: 8, m: 0, nextDay: 0 };
+        let arrT = { h: 10, m: 0, nextDay: 0 };
+
+        if (tLine.includes('-')) {
+          const tParts = tLine.split('-');
+          depT = parseTime(tParts[0]);
+          arrT = parseTime(tParts[1]);
+        }
+
+        const depDt = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day + depT.nextDay, depT.h, depT.m));
+        let arrDt = new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day + arrT.nextDay, arrT.h, arrT.m));
+
+        if (arrDt < depDt) {
+          arrDt = new Date(arrDt.getTime() + 24 * 3600 * 1000);
+        }
+
+        const fltMin = Math.max(1, Math.round((arrDt.getTime() - depDt.getTime()) / (60 * 1000)));
+
+        sectors.push({
+          dateStr: col0.split(' ')[0],
+          depAirport: depApt,
+          arrAirport: arrApt,
+          depTimeUtc: depDt,
+          arrTimeUtc: arrDt,
+          flightTimeMinutes: fltMin,
+          acType: '737',
+          reg: '',
+          picName: fltNum ? `WY ${fltNum}` : 'Scheduled Flight',
+          isSimulator: false,
+          isDayOff: false,
+          isStandby: false,
+          dutyCode: fltNum
+        });
+      }
+    }
+
+    return sectors;
+  }
+
+  /**
+   * Helper: Standard CSV parser that respects multiline quoted fields
+   */
+  function parseCsvWithQuotes(text) {
+    const rows = [];
+    let currentRow = [];
+    let currentField = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          currentField += '"';
+          i++; // Skip escaped quote
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        currentRow.push(currentField.trim());
+        currentField = '';
+      } else if ((char === '\r' || char === '\n') && !inQuotes) {
+        if (char === '\r' && nextChar === '\n') i++;
+        currentRow.push(currentField.trim());
+        rows.push(currentRow);
+        currentRow = [];
+        currentField = '';
+      } else {
+        currentField += char;
+      }
+    }
+
+    if (currentField || currentRow.length > 0) {
+      currentRow.push(currentField.trim());
+      rows.push(currentRow);
+    }
+
+    return rows;
+  }
+
+  /**
+   * Smart Merge: Combines newly parsed sectors/days off with existing sectors.
    */
   function mergeSectors(existingDuties, newSectors) {
-    // Extract existing sectors from all duties
     const sectorMap = new Map();
     let updatedCount = 0;
     let addedCount = 0;
 
-    // 1. Index existing sectors
     existingDuties.forEach(d => {
       d.sectors.forEach(s => {
-        const key = `${s.depAirport}_${s.arrAirport}_${s.depTimeUtc.getTime()}`;
+        const key = `${s.depAirport}_${s.arrAirport}_${s.depTimeUtc.getTime()}_${s.isDayOff ? 'OFF' : 'FLT'}`;
         sectorMap.set(key, s);
       });
     });
 
-    // 2. Merge new sectors
     newSectors.forEach(s => {
-      const key = `${s.depAirport}_${s.arrAirport}_${s.depTimeUtc.getTime()}`;
+      const key = `${s.depAirport}_${s.arrAirport}_${s.depTimeUtc.getTime()}_${s.isDayOff ? 'OFF' : 'FLT'}`;
       if (sectorMap.has(key)) {
-        // Update existing record with newest info
         sectorMap.set(key, s);
         updatedCount++;
       } else {
-        // Add new flight record
         sectorMap.set(key, s);
         addedCount++;
       }
@@ -153,13 +366,19 @@ const eCrewParser = (() => {
     if (!sectors || sectors.length === 0) return [];
 
     const sorted = [...sectors].sort((a, b) => a.depTimeUtc.getTime() - b.depTimeUtc.getTime());
-
     const duties = [];
     let currentSectors = [sorted[0]];
 
     for (let i = 1; i < sorted.length; i++) {
       const nextSec = sorted[i];
       const prevSec = currentSectors[currentSectors.length - 1];
+
+      // If either sector is a Day Off or Standby, separate it into its own duty block
+      if (prevSec.isDayOff || nextSec.isDayOff || prevSec.isStandby || nextSec.isStandby) {
+        duties.push(buildDutyPeriod(duties.length + 1, currentSectors));
+        currentSectors = [nextSec];
+        continue;
+      }
 
       const gapHours = (nextSec.depTimeUtc.getTime() - prevSec.arrTimeUtc.getTime()) / (1000 * 3600);
       const sameType = prevSec.isSimulator === nextSec.isSimulator;
@@ -182,7 +401,58 @@ const eCrewParser = (() => {
   function buildDutyPeriod(dutyId, sectors) {
     const first = sectors[0];
     const last = sectors[sectors.length - 1];
-    const isSim = first.isSimulator;
+    const isDayOff = first.isDayOff || false;
+    const isStandby = first.isStandby || false;
+    const isSim = first.isSimulator || false;
+
+    if (isDayOff) {
+      return {
+        dutyId: dutyId,
+        sectors: sectors,
+        isSimulator: false,
+        isDayOff: true,
+        isStandby: false,
+        reportTimeUtc: first.depTimeUtc,
+        firstDepUtc: first.depTimeUtc,
+        lastArrUtc: last.arrTimeUtc,
+        checkoutTimeUtc: last.arrTimeUtc,
+        fdpDurationMinutes: 0,
+        dutyDurationMinutes: 0,
+        flightTimeMinutes: 0,
+        sectorCount: 0,
+        factoredSectors: 0,
+        summaryRoute: first.picName || 'DAY OFF',
+        violations: [],
+        warnings: [],
+        status: 'OFF'
+      };
+    }
+
+    if (isStandby) {
+      const rawMin = Math.round((last.arrTimeUtc.getTime() - first.depTimeUtc.getTime()) / (60 * 1000));
+      const creditedDutyMin = FTLRules.getStandbyDutyCreditMinutes(rawMin, false);
+      return {
+        dutyId: dutyId,
+        sectors: sectors,
+        isSimulator: false,
+        isDayOff: false,
+        isStandby: true,
+        reportTimeUtc: first.depTimeUtc,
+        firstDepUtc: first.depTimeUtc,
+        lastArrUtc: last.arrTimeUtc,
+        checkoutTimeUtc: last.arrTimeUtc,
+        fdpDurationMinutes: 0,
+        dutyDurationMinutes: creditedDutyMin, // 25% credited for OM-A 7.1.4 (OM-A 7.1.7.8.c)
+        rawStandbyMinutes: rawMin,
+        flightTimeMinutes: 0,
+        sectorCount: 0,
+        factoredSectors: 0,
+        summaryRoute: `HOME STANDBY (${FTLRules.formatMinutesToHM(rawMin)} • 25% Credit: ${FTLRules.formatMinutesToHM(creditedDutyMin)})`,
+        violations: [],
+        warnings: [],
+        status: 'OK'
+      };
+    }
 
     const repOffset = FTLRules.getReportingOffsetMinutes(first.depAirport, isSim);
     const chkOffset = FTLRules.getCheckoutOffsetMinutes(isSim);
@@ -193,7 +463,6 @@ const eCrewParser = (() => {
     const fdpMin = Math.round((last.arrTimeUtc.getTime() - reportUtc.getTime()) / (60 * 1000));
     const dutyMin = Math.round((checkoutUtc.getTime() - reportUtc.getTime()) / (60 * 1000));
     const fltMin = sectors.reduce((acc, s) => acc + (s.flightTimeMinutes || 0), 0);
-
     const factored = FTLRules.calculateFactoredSectors(sectors, true);
 
     let summaryRoute = "N/A";
@@ -210,6 +479,8 @@ const eCrewParser = (() => {
       dutyId: dutyId,
       sectors: sectors,
       isSimulator: isSim,
+      isDayOff: false,
+      isStandby: false,
       reportTimeUtc: reportUtc,
       firstDepUtc: first.depTimeUtc,
       lastArrUtc: last.arrTimeUtc,
@@ -236,6 +507,22 @@ const eCrewParser = (() => {
       dp.violations = [];
       dp.warnings = [];
 
+      // Day Off Duty handling
+      if (dp.isDayOff) {
+        consecutiveDutyCounter = 0;
+        dp.consecutiveDutyDays = 0;
+        dp.precedingRestMinutes = null;
+        dp.requiredRestMinutes = null;
+        dp.maxFdpMinutes = 0;
+        dp.fdpMarginMinutes = 0;
+        dp.flightTime28dMinutes = 0;
+        dp.dutyTime7dMinutes = 0;
+        dp.dutyTime14dMinutes = 0;
+        dp.dutyTime28dMinutes = 0;
+        dp.status = 'OFF';
+        continue;
+      }
+
       if (i === 0) {
         dp.precedingRestMinutes = null;
         dp.requiredRestMinutes = null;
@@ -244,45 +531,55 @@ const eCrewParser = (() => {
         dp.consecutiveDutyDays = 1;
       } else {
         const prev = sorted[i - 1];
-        const restMin = Math.round((dp.reportTimeUtc.getTime() - prev.checkoutTimeUtc.getTime()) / (60 * 1000));
-        const reqMin = FTLRules.getRequiredRestMinutes(prev.dutyDurationMinutes);
-        const marginMin = restMin - reqMin;
 
-        dp.precedingRestMinutes = restMin;
-        dp.requiredRestMinutes = reqMin;
-        dp.restMarginMinutes = marginMin;
-
-        const dayOff = FTLRules.evaluateDayOff(prev.checkoutTimeUtc, dp.reportTimeUtc);
-        if (dayOff.isValid) {
+        // If preceding was an explicit Day Off
+        if (prev.isDayOff) {
           consecutiveDutyCounter = 1;
+          dp.precedingRestMinutes = 24 * 60;
+          dp.requiredRestMinutes = 12 * 60;
+          dp.restMarginMinutes = 12 * 60;
         } else {
-          consecutiveDutyCounter++;
-        }
-        dp.consecutiveDutyDays = consecutiveDutyCounter;
+          const restMin = Math.round((dp.reportTimeUtc.getTime() - prev.checkoutTimeUtc.getTime()) / (60 * 1000));
+          const reqMin = FTLRules.getRequiredRestMinutes(prev.dutyDurationMinutes);
+          const marginMin = restMin - reqMin;
 
-        if (restMin < reqMin) {
-          dp.violations.push({
-            category: 'REST_PERIOD',
-            title: 'Insufficient Preceding Rest',
-            detail: `Rest of ${FTLRules.formatMinutesToHM(restMin)} is below minimum required ${FTLRules.formatMinutesToHM(reqMin)}.`,
-            ref: 'OM-A 7.1.6.4',
-            margin: FTLRules.formatMinutesToHM(marginMin)
-          });
-        } else if (marginMin <= FTLRules.WARNING_THRESHOLDS.REST_MARGIN_MIN) {
-          dp.warnings.push({
-            category: 'REST_PERIOD',
-            title: 'Tight Rest Margin',
-            detail: `Rest margin of ${FTLRules.formatMinutesToHM(marginMin)} is close to the minimum legal limit.`,
-            ref: 'OM-A 7.1.6.4',
-            margin: FTLRules.formatMinutesToHM(marginMin)
-          });
+          dp.precedingRestMinutes = restMin;
+          dp.requiredRestMinutes = reqMin;
+          dp.restMarginMinutes = marginMin;
+
+          const dayOff = FTLRules.evaluateDayOff(prev.checkoutTimeUtc, dp.reportTimeUtc);
+          if (dayOff.isValid) {
+            consecutiveDutyCounter = 1;
+          } else {
+            consecutiveDutyCounter++;
+          }
+
+          if (restMin < reqMin) {
+            dp.violations.push({
+              category: 'REST_PERIOD',
+              title: 'Insufficient Preceding Rest',
+              detail: `Rest of ${FTLRules.formatMinutesToHM(restMin)} is below minimum required ${FTLRules.formatMinutesToHM(reqMin)}.`,
+              ref: 'OM-A 7.1.6.4',
+              margin: FTLRules.formatMinutesToHM(marginMin)
+            });
+          } else if (marginMin <= FTLRules.WARNING_THRESHOLDS.REST_MARGIN_MIN) {
+            dp.warnings.push({
+              category: 'REST_PERIOD',
+              title: 'Tight Rest Margin',
+              detail: `Rest margin of ${FTLRules.formatMinutesToHM(marginMin)} is close to the minimum legal limit.`,
+              ref: 'OM-A 7.1.6.4',
+              margin: FTLRules.formatMinutesToHM(marginMin)
+            });
+          }
         }
+
+        dp.consecutiveDutyDays = consecutiveDutyCounter;
 
         if (dp.consecutiveDutyDays > FTLRules.LIMITS.MAX_CONSECUTIVE_DAYS) {
           dp.violations.push({
             category: 'CONSECUTIVE_DUTY',
             title: 'Exceeded Consecutive Duty Days',
-            detail: `Working on consecutive duty day ${dp.consecutiveDutyDays} without a required statutory day off (max 7 days).`,
+            detail: `Working on consecutive duty day ${dp.consecutiveDutyDays} without a statutory day off (OM-A max 7 days).`,
             ref: 'OM-A 7.1.5(1)',
             margin: `+${dp.consecutiveDutyDays - 7}d`
           });
@@ -297,7 +594,7 @@ const eCrewParser = (() => {
         }
       }
 
-      if (dp.isSimulator) {
+      if (dp.isSimulator || dp.isStandby) {
         dp.maxFdpMinutes = dp.dutyDurationMinutes;
         dp.fdpMarginMinutes = 0;
       } else {
@@ -329,6 +626,7 @@ const eCrewParser = (() => {
       const window28dStart = endTime - 28 * 24 * 3600 * 1000;
       let flt28d = 0;
       for (const p of sorted) {
+        if (p.isDayOff) continue;
         const pArr = p.lastArrUtc.getTime();
         if (pArr <= endTime && pArr >= window28dStart) {
           flt28d += (p.flightTimeMinutes || 0);
@@ -356,6 +654,7 @@ const eCrewParser = (() => {
       const window7dStart = endTime - 7 * 24 * 3600 * 1000;
       let duty7d = 0;
       for (const p of sorted) {
+        if (p.isDayOff) continue;
         const pChk = p.checkoutTimeUtc.getTime();
         if (pChk <= endTime && pChk >= window7dStart) {
           duty7d += (p.dutyDurationMinutes || 0);
@@ -383,6 +682,7 @@ const eCrewParser = (() => {
       const window14dStart = endTime - 14 * 24 * 3600 * 1000;
       let duty14d = 0;
       for (const p of sorted) {
+        if (p.isDayOff) continue;
         const pChk = p.checkoutTimeUtc.getTime();
         if (pChk <= endTime && pChk >= window14dStart) {
           duty14d += (p.dutyDurationMinutes || 0);
@@ -401,6 +701,7 @@ const eCrewParser = (() => {
 
       let duty28d = 0;
       for (const p of sorted) {
+        if (p.isDayOff) continue;
         const pChk = p.checkoutTimeUtc.getTime();
         if (pChk <= endTime && pChk >= window28dStart) {
           duty28d += (p.dutyDurationMinutes || 0);
@@ -427,6 +728,8 @@ const eCrewParser = (() => {
 
   return {
     parseCsvContent,
+    parseRosterSchedule,
+    parseFlightLogbook,
     mergeSectors,
     groupSectorsIntoDuties,
     recalculateDutiesAnalysis

@@ -502,7 +502,11 @@ document.addEventListener('DOMContentLoaded', () => {
       tr.addEventListener('click', () => openDutyModal(d.dutyId));
 
       let badgeHtml = '';
-      if (!isPast) {
+      if (d.isDayOff) {
+        badgeHtml = `<span class="badge badge-legal" style="background:rgba(16,185,129,0.18);color:#10b981;border:1px solid rgba(16,185,129,0.4);">🏖️ ${d.summaryRoute || 'Day Off'}</span>`;
+      } else if (d.isStandby) {
+        badgeHtml = `<span class="badge badge-scheduled" style="background:rgba(14,165,233,0.18);color:#38bdf8;border:1px solid rgba(14,165,233,0.4);">📞 Home Standby</span>`;
+      } else if (!isPast) {
         if (d.status === 'VIOLATION') badgeHtml = '<span class="badge badge-illegal">⚠️ Illegal Roster</span>';
         else if (d.status === 'WARNING') badgeHtml = '<span class="badge badge-warning">⚡ Tight Roster</span>';
         else badgeHtml = '<span class="badge badge-scheduled">Rostered</span>';
@@ -515,24 +519,23 @@ document.addEventListener('DOMContentLoaded', () => {
       if (d.isSimulator) badgeHtml += ' <span class="badge badge-sim">SIM</span>';
 
       const dateStr = d.firstDepUtc ? d.firstDepUtc.toISOString().slice(0,10) : 'N/A';
-      const repStr = d.reportTimeUtc ? d.reportTimeUtc.toISOString().slice(11,16) : '--:--';
-      const chkStr = d.checkoutTimeUtc ? d.checkoutTimeUtc.toISOString().slice(11,16) : '--:--';
+      const repStr = (d.isDayOff) ? '--:--' : (d.reportTimeUtc ? d.reportTimeUtc.toISOString().slice(11,16) : '--:--');
+      const chkStr = (d.isDayOff) ? '--:--' : (d.checkoutTimeUtc ? d.checkoutTimeUtc.toISOString().slice(11,16) : '--:--');
+      const fdpDisplay = (d.isDayOff || d.isStandby) ? '-' : `${FTLRules.formatMinutesToHM(d.fdpDurationMinutes)} <span style="color:var(--text-muted);font-size:11px;">/ ${d.isSimulator ? 'N/A' : FTLRules.formatMinutesToHM(d.maxFdpMinutes)}</span>`;
+      const restDisplay = (d.isDayOff) ? '-' : (d.precedingRestMinutes !== null ? FTLRules.formatMinutesToHM(d.precedingRestMinutes) : 'Start');
+      const dutyDayDisplay = (d.isDayOff) ? '<span style="color:#10b981;font-weight:700;">OFF (Reset)</span>' : `<span style="font-weight:700;color:${d.consecutiveDutyDays >= 7 ? 'var(--danger)' : (d.consecutiveDutyDays >= 6 ? 'var(--warning)' : 'var(--text-primary)')};">Day ${d.consecutiveDutyDays || 1}/7</span>`;
 
       tr.innerHTML = `
         <td class="mono">#${d.dutyId}</td>
         <td><strong>${dateStr}</strong></td>
-        <td><strong>${d.summaryRoute}</strong> <span style="color:var(--text-muted);font-size:11px;">(${d.sectorCount}s)</span></td>
-        <td class="mono">${repStr} UTC</td>
-        <td class="mono">${chkStr} UTC</td>
-        <td class="mono">${FTLRules.formatMinutesToHM(d.fdpDurationMinutes)} <span style="color:var(--text-muted);font-size:11px;">/ ${d.isSimulator ? 'N/A' : FTLRules.formatMinutesToHM(d.maxFdpMinutes)}</span></td>
-        <td class="mono">${d.precedingRestMinutes !== null ? FTLRules.formatMinutesToHM(d.precedingRestMinutes) : 'Start'}</td>
-        <td class="mono">
-          <span style="font-weight:700;color:${d.consecutiveDutyDays >= 7 ? 'var(--danger)' : (d.consecutiveDutyDays >= 6 ? 'var(--warning)' : 'var(--text-primary)')};">
-            Day ${d.consecutiveDutyDays || 1}/7
-          </span>
-        </td>
-        <td class="mono">${FTLRules.formatMinutesToHM(d.flightTime28dMinutes)}</td>
-        <td class="mono">${FTLRules.formatMinutesToHM(d.dutyTime7dMinutes)}</td>
+        <td><strong>${d.summaryRoute}</strong> <span style="color:var(--text-muted);font-size:11px;">${d.isDayOff ? '' : `(${d.sectorCount}s)`}</span></td>
+        <td class="mono">${repStr} ${d.isDayOff ? '' : 'UTC'}</td>
+        <td class="mono">${chkStr} ${d.isDayOff ? '' : 'UTC'}</td>
+        <td class="mono">${fdpDisplay}</td>
+        <td class="mono">${restDisplay}</td>
+        <td class="mono">${dutyDayDisplay}</td>
+        <td class="mono">${d.isDayOff ? '-' : FTLRules.formatMinutesToHM(d.flightTime28dMinutes)}</td>
+        <td class="mono">${d.isDayOff ? '-' : FTLRules.formatMinutesToHM(d.dutyTime7dMinutes)}</td>
         <td>${badgeHtml}</td>
       `;
       tbody.appendChild(tr);
