@@ -77,25 +77,6 @@ A client-side, 100% offline-first **Progressive Web App (PWA)** built for flight
 
 ---
 
-## 🚀 How to Publish for Free on GitHub Pages
-
-1. **Create a GitHub Repository:**
-   - Go to [github.com](https://github.com/) and create a new repository.
-2. **Push the contents of this folder:**
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit - Oman Air FTL PWA"
-   git branch -M main
-   git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
-   git push -u origin main
-   ```
-3. **Enable GitHub Pages:**
-   - Go to your repository **Settings** $\rightarrow$ **Pages**.
-   - Under **Build and deployment** $\rightarrow$ **Branch**, select `main` (root `/`) and click **Save**.
-   - Your PWA will be live at: `https://YOUR_USERNAME.github.io/YOUR_REPO_NAME/`
-
----
 
 ## 📱 How to Install on Devices
 
