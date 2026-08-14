@@ -4,7 +4,7 @@
  * Regulations valid as of August 2026
  */
 
-const CACHE_NAME = 'oman-air-ftl-v1.3.8'; // Robust active schedule Days Off KPI & Inspector integration
+const CACHE_NAME = 'oman-air-ftl-v1.3.9'; // Crystal clear Days Off 28d vs 3-Mo labels
 const STATIC_ASSETS = [
   './',
   './index.html',

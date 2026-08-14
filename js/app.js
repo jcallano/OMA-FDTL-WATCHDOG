@@ -166,34 +166,34 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('dashConsecValue').innerText = `${consec} Days`;
     document.getElementById('dashConsecSub').innerText = `${Math.max(0, 7 - consec)} days until required day off`;
 
-    // Days Off 28d & 84d (3-Month / 3-Period Avg)
+    // Days Off Monitor (OM-A 7.1.5.3: Min 7d in 28d & OM-A 7.1.5.4: Avg 8.0/28d in 84d/3-Mo)
     const dashDaysOffVal = document.getElementById('dashDaysOffValue');
     const dashDaysOff28Sub = document.getElementById('dashDaysOff28Sub');
     const dashDaysOff84Sub = document.getElementById('dashDaysOff84Sub');
     const dashDaysOffBadge = document.getElementById('dashDaysOffBadge');
 
     if (dashDaysOffVal && allDuties.length > 0) {
-      const lastRosteredDuty = allDuties[allDuties.length - 1];
+      const lastDuty = allDuties[allDuties.length - 1];
       const totalDaysOff = allDuties.filter(d => d.isDayOff).length;
       
       const startMs = allDuties[0].firstDepUtc.getTime();
-      const endMs = lastRosteredDuty.lastArrUtc.getTime();
+      const endMs = lastDuty.lastArrUtc.getTime();
       const spanDays = Math.max(1, Math.round((endMs - startMs) / (24 * 3600 * 1000)) + 1);
 
-      // Rolling 28d on active schedule
-      const d28 = (spanDays >= 28 && lastRosteredDuty.daysOff28dCount !== undefined) ? lastRosteredDuty.daysOff28dCount : totalDaysOff;
-      const d84 = lastRosteredDuty.daysOff84dCount !== undefined ? lastRosteredDuty.daysOff84dCount : totalDaysOff;
-      
-      // If dataset span is less than 80 days (e.g. 1 month loaded), calculate prorated 28d rate
-      const avgRate28d = (spanDays < 80) ? ((totalDaysOff / spanDays) * 28).toFixed(1) : (lastRosteredDuty.daysOff84dAvg || (d84 / 3).toFixed(1));
+      // Distinct 28-day rolling window vs 84-day (3-month) window
+      const d28 = lastDuty.daysOff28dCount !== undefined ? lastDuty.daysOff28dCount : (spanDays <= 31 ? totalDaysOff : Math.min(28, totalDaysOff));
+      const d84 = lastDuty.daysOff84dCount !== undefined ? lastDuty.daysOff84dCount : totalDaysOff;
+      const avgRate28d = (spanDays >= 80) ? (lastDuty.daysOff84dAvg || (d84 / 3).toFixed(1)) : ((totalDaysOff / spanDays) * 28).toFixed(1);
 
       dashDaysOffVal.textContent = `${d28} Days (28d)`;
-      if (dashDaysOff28Sub) dashDaysOff28Sub.textContent = `28d: ${d28} / 7 min`;
+      if (dashDaysOff28Sub) {
+        dashDaysOff28Sub.textContent = `28-Day: ${d28} of 7 min`;
+      }
       if (dashDaysOff84Sub) {
         if (spanDays >= 80) {
-          dashDaysOff84Sub.textContent = `3-Mo: ${d84}/24d (Avg ${avgRate28d}/28d)`;
+          dashDaysOff84Sub.textContent = `3-Month: ${d84} of 24 min (Avg ${avgRate28d}/28d)`;
         } else {
-          dashDaysOff84Sub.textContent = `Rate: ${avgRate28d} / 8.0 min (${totalDaysOff} in ${spanDays}d)`;
+          dashDaysOff84Sub.textContent = `3-Mo Rate: ${avgRate28d} / 8.0 min (${totalDaysOff} in ${spanDays}d)`;
         }
       }
 
