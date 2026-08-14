@@ -799,4 +799,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btnClearDataAndUpdate')?.addEventListener('click', clearDataAndForceUpdate);
   document.getElementById('btnBannerReset')?.addEventListener('click', clearDataAndForceUpdate);
+  document.getElementById('btnBannerManual')?.addEventListener('click', () => switchTab('tab-manual'));
 });

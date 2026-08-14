@@ -4,7 +4,7 @@
  * Regulations valid as of August 2026
  */
 
-const CACHE_NAME = 'oman-air-ftl-v1.3.2'; // Added Favicon and App Touch Icons
+const CACHE_NAME = 'oman-air-ftl-v1.3.3'; // Added direct banner Manual button
 const STATIC_ASSETS = [
   './',
   './index.html',
