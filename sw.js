@@ -4,7 +4,7 @@
  * Regulations valid as of August 2026
  */
 
-const CACHE_NAME = 'oman-air-ftl-v1.3.9'; // Crystal clear Days Off 28d vs 3-Mo labels
+const CACHE_NAME = 'oman-air-ftl-v1.4.0'; // High-contrast KPI badges & dynamic rolling days off calculation
 const STATIC_ASSETS = [
   './',
   './index.html',

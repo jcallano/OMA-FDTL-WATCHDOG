@@ -174,16 +174,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (dashDaysOffVal && allDuties.length > 0) {
       const lastDuty = allDuties[allDuties.length - 1];
-      const totalDaysOff = allDuties.filter(d => d.isDayOff).length;
-      
-      const startMs = allDuties[0].firstDepUtc.getTime();
       const endMs = lastDuty.lastArrUtc.getTime();
+      const startMs = allDuties[0].firstDepUtc.getTime();
       const spanDays = Math.max(1, Math.round((endMs - startMs) / (24 * 3600 * 1000)) + 1);
 
-      // Distinct 28-day rolling window vs 84-day (3-month) window
-      const d28 = lastDuty.daysOff28dCount !== undefined ? lastDuty.daysOff28dCount : (spanDays <= 31 ? totalDaysOff : Math.min(28, totalDaysOff));
-      const d84 = lastDuty.daysOff84dCount !== undefined ? lastDuty.daysOff84dCount : totalDaysOff;
-      const avgRate28d = (spanDays >= 80) ? (lastDuty.daysOff84dAvg || (d84 / 3).toFixed(1)) : ((totalDaysOff / spanDays) * 28).toFixed(1);
+      const window28dStart = endMs - 28 * 24 * 3600 * 1000;
+      const window84dStart = endMs - 84 * 24 * 3600 * 1000;
+
+      let d28 = 0;
+      let d84 = 0;
+      let totalDaysOff = 0;
+
+      for (const d of allDuties) {
+        if (!d.isDayOff) continue;
+        totalDaysOff++;
+        const t = d.firstDepUtc.getTime();
+        if (t <= endMs && t >= window28dStart) d28++;
+        if (t <= endMs && t >= window84dStart) d84++;
+      }
+
+      if (spanDays < 28) d28 = totalDaysOff;
+      if (spanDays < 84) d84 = totalDaysOff;
+
+      const avgRate28d = (spanDays >= 80) ? (d84 / 3).toFixed(1) : ((totalDaysOff / spanDays) * 28).toFixed(1);
 
       dashDaysOffVal.textContent = `${d28} Days (28d)`;
       if (dashDaysOff28Sub) {
@@ -201,19 +214,19 @@ document.addEventListener('DOMContentLoaded', () => {
         dashDaysOffVal.style.color = '#ef4444';
         if (dashDaysOffBadge) {
           dashDaysOffBadge.textContent = 'DEFICIT (<7d)';
-          dashDaysOffBadge.className = 'kpi-limit-badge bg-danger';
+          dashDaysOffBadge.className = 'kpi-limit-badge badge-danger';
         }
       } else if (parseFloat(avgRate28d) < 8.0 && spanDays >= 27) {
-        dashDaysOffVal.style.color = '#f59e0b';
+        dashDaysOffVal.style.color = '#fbbf24';
         if (dashDaysOffBadge) {
           dashDaysOffBadge.textContent = 'TIGHT RATE';
-          dashDaysOffBadge.className = 'kpi-limit-badge bg-warning';
+          dashDaysOffBadge.className = 'kpi-limit-badge badge-warning';
         }
       } else {
-        dashDaysOffVal.style.color = '#10b981';
+        dashDaysOffVal.style.color = '#34d399';
         if (dashDaysOffBadge) {
           dashDaysOffBadge.textContent = 'LEGAL OK';
-          dashDaysOffBadge.className = 'kpi-limit-badge bg-ok';
+          dashDaysOffBadge.className = 'kpi-limit-badge badge-ok';
         }
       }
     }
