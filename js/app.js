@@ -172,25 +172,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const dashDaysOff84Sub = document.getElementById('dashDaysOff84Sub');
     const dashDaysOffBadge = document.getElementById('dashDaysOffBadge');
 
-    if (dashDaysOffVal) {
-      const d28 = latestDuty.daysOff28dCount !== undefined ? latestDuty.daysOff28dCount : 0;
-      const d84 = latestDuty.daysOff84dCount !== undefined ? latestDuty.daysOff84dCount : 0;
-      const avg84 = latestDuty.daysOff84dAvg !== undefined ? latestDuty.daysOff84dAvg : (d84 / 3).toFixed(1);
+    if (dashDaysOffVal && allDuties.length > 0) {
+      const lastRosteredDuty = allDuties[allDuties.length - 1];
+      const totalDaysOff = allDuties.filter(d => d.isDayOff).length;
+      
+      const startMs = allDuties[0].firstDepUtc.getTime();
+      const endMs = lastRosteredDuty.lastArrUtc.getTime();
+      const spanDays = Math.max(1, Math.round((endMs - startMs) / (24 * 3600 * 1000)) + 1);
+
+      // Rolling 28d on active schedule
+      const d28 = (spanDays >= 28 && lastRosteredDuty.daysOff28dCount !== undefined) ? lastRosteredDuty.daysOff28dCount : totalDaysOff;
+      const d84 = lastRosteredDuty.daysOff84dCount !== undefined ? lastRosteredDuty.daysOff84dCount : totalDaysOff;
+      
+      // If dataset span is less than 80 days (e.g. 1 month loaded), calculate prorated 28d rate
+      const avgRate28d = (spanDays < 80) ? ((totalDaysOff / spanDays) * 28).toFixed(1) : (lastRosteredDuty.daysOff84dAvg || (d84 / 3).toFixed(1));
 
       dashDaysOffVal.textContent = `${d28} Days (28d)`;
       if (dashDaysOff28Sub) dashDaysOff28Sub.textContent = `28d: ${d28} / 7 min`;
-      if (dashDaysOff84Sub) dashDaysOff84Sub.textContent = `3-Mo: ${d84}/24d (Avg ${avg84}/28d)`;
+      if (dashDaysOff84Sub) {
+        if (spanDays >= 80) {
+          dashDaysOff84Sub.textContent = `3-Mo: ${d84}/24d (Avg ${avgRate28d}/28d)`;
+        } else {
+          dashDaysOff84Sub.textContent = `Rate: ${avgRate28d} / 8.0 min (${totalDaysOff} in ${spanDays}d)`;
+        }
+      }
 
-      if (d28 < 7 || (d84 < 24 && allDuties.length >= 25)) {
+      if (d28 < 7 && spanDays >= 27) {
         dashDaysOffVal.style.color = '#ef4444';
         if (dashDaysOffBadge) {
-          dashDaysOffBadge.textContent = 'DEFICIT';
+          dashDaysOffBadge.textContent = 'DEFICIT (<7d)';
           dashDaysOffBadge.className = 'kpi-limit-badge bg-danger';
         }
-      } else if (d28 === 7 || (d84 <= 25 && allDuties.length >= 25)) {
+      } else if (parseFloat(avgRate28d) < 8.0 && spanDays >= 27) {
         dashDaysOffVal.style.color = '#f59e0b';
         if (dashDaysOffBadge) {
-          dashDaysOffBadge.textContent = 'TIGHT';
+          dashDaysOffBadge.textContent = 'TIGHT RATE';
           dashDaysOffBadge.className = 'kpi-limit-badge bg-warning';
         }
       } else {
@@ -668,6 +684,14 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('modalRestInfo').innerText = `${d.precedingRestMinutes !== null ? FTLRules.formatMinutesToHM(d.precedingRestMinutes) : 'Initial Rest'} (Required: ${d.requiredRestMinutes ? FTLRules.formatMinutesToHM(d.requiredRestMinutes) : 'N/A'})`;
     document.getElementById('modalFlt28Info').innerText = `${FTLRules.formatMinutesToHM(d.flightTime28dMinutes)} / 100h 00m`;
     document.getElementById('modalDuty7Info').innerText = `7d: ${FTLRules.formatMinutesToHM(d.dutyTime7dMinutes)}/55h | 14d: ${FTLRules.formatMinutesToHM(d.dutyTime14dMinutes)}/95h`;
+    
+    const daysOffElem = document.getElementById('modalDaysOffInfo');
+    if (daysOffElem) {
+      const d28 = d.daysOff28dCount !== undefined ? d.daysOff28dCount : '-';
+      const d84 = d.daysOff84dCount !== undefined ? d.daysOff84dCount : '-';
+      const avg84 = d.daysOff84dAvg !== undefined ? d.daysOff84dAvg : '-';
+      daysOffElem.innerText = `28d: ${d28}/7 min • 3-Mo: ${d84}/24d (Avg: ${avg84}/28d)`;
+    }
 
     const sectorsBody = document.getElementById('modalSectorsBody');
     sectorsBody.innerHTML = '';

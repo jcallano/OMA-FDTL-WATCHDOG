@@ -4,7 +4,7 @@
  * Regulations valid as of August 2026
  */
 
-const CACHE_NAME = 'oman-air-ftl-v1.3.7'; // Auto-synthesize statutory Days Off between base duties in Logbooks
+const CACHE_NAME = 'oman-air-ftl-v1.3.8'; // Robust active schedule Days Off KPI & Inspector integration
 const STATIC_ASSETS = [
   './',
   './index.html',
