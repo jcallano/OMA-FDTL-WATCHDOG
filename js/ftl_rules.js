@@ -85,9 +85,14 @@ const FTLRules = (() => {
     return Math.max(count, 1);
   }
 
-  function getMaxFdpMinutes(reportLocalDate, sectorCount, isAcclimatised = true) {
-    const h = reportLocalDate.getHours();
-    const m = reportLocalDate.getMinutes();
+  function getMaxFdpMinutes(reportTimeDate, sectorCount, isAcclimatised = true) {
+    if (!reportTimeDate) return 13 * 60;
+    const repMs = (reportTimeDate instanceof Date) ? reportTimeDate.getTime() : new Date(reportTimeDate).getTime();
+    // Convert to Base Local Time (MCT is UTC+4)
+    const localShifted = new Date(repMs + BASE_UTC_OFFSET_HOURS * 3600 * 1000);
+    // Read strictly in UTC of shifted timestamp to avoid OS timezone distortion
+    const h = localShifted.getUTCHours();
+    const m = localShifted.getUTCMinutes();
     const totalMinutes = h * 60 + m;
     const sIdx = Math.min(Math.max(sectorCount, 1), 8) - 1;
 
@@ -100,12 +105,13 @@ const FTLRules = (() => {
           return tableVals[sIdx];
         }
       } else {
+        // Window crossing midnight (22:00 to 05:59)
         if (totalMinutes >= startBound || totalMinutes <= endBound) {
           return tableVals[sIdx];
         }
       }
     }
-    return 11 * 60;
+    return 11 * 60; // Conservative default
   }
 
   function getRequiredRestMinutes(precedingDutyMinutes) {

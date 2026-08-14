@@ -4,7 +4,7 @@
  * Regulations valid as of August 2026
  */
 
-const CACHE_NAME = 'oman-air-ftl-v1.2.4'; // Fixed eCrew Roster CSV parser & multiline edge cases
+const CACHE_NAME = 'oman-air-ftl-v1.2.7'; // Duty terminates at Chocks-on, 30m debrief solely for rest commencement
 const STATIC_ASSETS = [
   './',
   './index.html',
