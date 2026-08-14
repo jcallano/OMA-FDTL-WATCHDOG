@@ -4,7 +4,7 @@
  * Regulations valid as of August 2026
  */
 
-const CACHE_NAME = 'oman-air-ftl-v1.2.9'; // Added Reset Data & Force Live Update button
+const CACHE_NAME = 'oman-air-ftl-v1.3.1'; // Embedded Offline User Manual tab and guide
 const STATIC_ASSETS = [
   './',
   './index.html',

@@ -598,15 +598,8 @@ const eCrewParser = (() => {
         dp.requiredRestMinutes = null;
         dp.maxFdpMinutes = 0;
         dp.fdpMarginMinutes = 0;
-        dp.flightTime28dMinutes = 0;
-        dp.dutyTime7dMinutes = 0;
-        dp.dutyTime14dMinutes = 0;
-        dp.dutyTime28dMinutes = 0;
         dp.status = 'OFF';
-        continue;
-      }
-
-      if (i === 0) {
+      } else if (i === 0) {
         dp.precedingRestMinutes = null;
         dp.requiredRestMinutes = null;
         dp.restMarginMinutes = null;
