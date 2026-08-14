@@ -4,11 +4,15 @@
  * Regulations valid as of August 2026
  */
 
-const CACHE_NAME = 'oman-air-ftl-v1.3.1'; // Embedded Offline User Manual tab and guide
+const CACHE_NAME = 'oman-air-ftl-v1.3.2'; // Added Favicon and App Touch Icons
 const STATIC_ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './favicon.ico',
+  './favicon.svg',
+  './icon-192.png',
+  './icon-512.png',
   './css/app.css',
   './js/ftl_rules.js',
   './js/storage.js',
