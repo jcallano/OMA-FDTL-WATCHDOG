@@ -14,7 +14,9 @@ const FTLRules = (() => {
     MAX_DUTY_14D: 95 * 60,    // 95 hours
     MAX_DUTY_28D: 190 * 60,   // 190 hours
     MAX_CONSECUTIVE_DAYS: 7,
-    MIN_DAYS_OFF_28D: 7,
+    MIN_DAYS_OFF_28D: 7,      // OM-A 7.1.5(3): Min 7 days off in 28 consecutive days
+    MIN_DAYS_OFF_84D: 24,     // OM-A 7.1.5(4): 24 days off in 84 days (3 periods of 28d)
+    MIN_AVG_DAYS_OFF_3P: 8.0, // OM-A 7.1.5(4): Average at least 8.0 days off per 28d over 3 periods
     MIN_CONSECUTIVE_DAYS_OFF_14D: 2
   };
 

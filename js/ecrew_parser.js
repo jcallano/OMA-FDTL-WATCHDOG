@@ -782,6 +782,69 @@ const eCrewParser = (() => {
         });
       }
 
+      // OM-A 7.1.5(3): Minimum 7 days off in any consecutive 28-day period
+      let daysOff28d = 0;
+      for (const p of sorted) {
+        const pTime = p.lastArrUtc.getTime();
+        if (pTime <= endTime && pTime >= window28dStart && p.isDayOff) {
+          daysOff28d++;
+        }
+      }
+      dp.daysOff28dCount = daysOff28d;
+
+      const oldestDutyTime = sorted[0].firstDepUtc.getTime();
+      const has28dHistory = (endTime - oldestDutyTime) >= (27 * 24 * 3600 * 1000);
+
+      if (has28dHistory && daysOff28d < 7) {
+        dp.violations.push({
+          category: 'DAYS_OFF_28D',
+          title: 'Insufficient Days Off in 28 Days',
+          detail: `Accumulated ${daysOff28d} days off in 28 days (OM-A 7.1.5(3) requires at least 7 days off).`,
+          ref: 'OM-A 7.1.5(3)',
+          margin: `-${7 - daysOff28d}d`
+        });
+      } else if (has28dHistory && daysOff28d === 7) {
+        dp.warnings.push({
+          category: 'DAYS_OFF_28D',
+          title: 'Minimum Days Off in 28 Days Reached',
+          detail: `Exactly 7 days off in 28 days (minimum legal limit).`,
+          ref: 'OM-A 7.1.5(3)',
+          margin: '0d'
+        });
+      }
+
+      // OM-A 7.1.5(4): Average at least 8 days off per 28d over 3 consecutive periods (84 days -> min 24 days off)
+      const window84dStart = endTime - 84 * 24 * 3600 * 1000;
+      let daysOff84d = 0;
+      for (const p of sorted) {
+        const pTime = p.lastArrUtc.getTime();
+        if (pTime <= endTime && pTime >= window84dStart && p.isDayOff) {
+          daysOff84d++;
+        }
+      }
+      dp.daysOff84dCount = daysOff84d;
+      dp.daysOff84dAvg = (daysOff84d / 3).toFixed(1);
+
+      const has84dHistory = (endTime - oldestDutyTime) >= (80 * 24 * 3600 * 1000);
+
+      if (has84dHistory && daysOff84d < 24) {
+        dp.violations.push({
+          category: 'DAYS_OFF_84D',
+          title: 'Insufficient 3-Period (3-Month) Days Off Average',
+          detail: `Accumulated ${daysOff84d} days off in 84 days (average ${dp.daysOff84dAvg} days/28d). OM-A requires an average of at least 8.0 days off per 28-day period (24 days in 84 days).`,
+          ref: 'OM-A 7.1.5(4)',
+          margin: `-${24 - daysOff84d}d`
+        });
+      } else if (has84dHistory && daysOff84d <= 25) {
+        dp.warnings.push({
+          category: 'DAYS_OFF_84D',
+          title: 'Tight 3-Period Days Off Average',
+          detail: `Accumulated ${daysOff84d} days off in 84 days (average ${dp.daysOff84dAvg} days/28d). Close to the mandatory 24-day minimum (8.0 avg).`,
+          ref: 'OM-A 7.1.5(4)',
+          margin: `+${daysOff84d - 24}d`
+        });
+      }
+
       if (dp.violations.length > 0) dp.status = 'VIOLATION';
       else if (dp.warnings.length > 0) dp.status = 'WARNING';
       else dp.status = 'OK';

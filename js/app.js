@@ -166,6 +166,42 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('dashConsecValue').innerText = `${consec} Days`;
     document.getElementById('dashConsecSub').innerText = `${Math.max(0, 7 - consec)} days until required day off`;
 
+    // Days Off 28d & 84d (3-Month / 3-Period Avg)
+    const dashDaysOffVal = document.getElementById('dashDaysOffValue');
+    const dashDaysOff28Sub = document.getElementById('dashDaysOff28Sub');
+    const dashDaysOff84Sub = document.getElementById('dashDaysOff84Sub');
+    const dashDaysOffBadge = document.getElementById('dashDaysOffBadge');
+
+    if (dashDaysOffVal) {
+      const d28 = latestDuty.daysOff28dCount !== undefined ? latestDuty.daysOff28dCount : 0;
+      const d84 = latestDuty.daysOff84dCount !== undefined ? latestDuty.daysOff84dCount : 0;
+      const avg84 = latestDuty.daysOff84dAvg !== undefined ? latestDuty.daysOff84dAvg : (d84 / 3).toFixed(1);
+
+      dashDaysOffVal.textContent = `${d28} Days (28d)`;
+      if (dashDaysOff28Sub) dashDaysOff28Sub.textContent = `28d: ${d28} / 7 min`;
+      if (dashDaysOff84Sub) dashDaysOff84Sub.textContent = `3-Mo: ${d84}/24d (Avg ${avg84}/28d)`;
+
+      if (d28 < 7 || (d84 < 24 && allDuties.length >= 25)) {
+        dashDaysOffVal.style.color = '#ef4444';
+        if (dashDaysOffBadge) {
+          dashDaysOffBadge.textContent = 'DEFICIT';
+          dashDaysOffBadge.className = 'kpi-limit-badge bg-danger';
+        }
+      } else if (d28 === 7 || (d84 <= 25 && allDuties.length >= 25)) {
+        dashDaysOffVal.style.color = '#f59e0b';
+        if (dashDaysOffBadge) {
+          dashDaysOffBadge.textContent = 'TIGHT';
+          dashDaysOffBadge.className = 'kpi-limit-badge bg-warning';
+        }
+      } else {
+        dashDaysOffVal.style.color = '#10b981';
+        if (dashDaysOffBadge) {
+          dashDaysOffBadge.textContent = 'LEGAL OK';
+          dashDaysOffBadge.className = 'kpi-limit-badge bg-ok';
+        }
+      }
+    }
+
     const upcomingHazards = upcomingDuties.filter(d => d.status === 'VIOLATION' || d.status === 'WARNING').length;
     const violCount = allDuties.filter(d => d.status === 'VIOLATION').length;
     const warnCount = allDuties.filter(d => d.status === 'WARNING').length;
@@ -205,10 +241,11 @@ document.addEventListener('DOMContentLoaded', () => {
             tension: 0.3
           },
           {
-            label: '28-Day Limit (100h)',
+            label: '28-Day Flight Limit (100h)',
             data: sampled.map(() => 100),
             borderColor: '#ef4444',
             borderDash: [5, 5],
+            borderWidth: 1.5,
             pointRadius: 0,
             fill: false
           },
@@ -217,6 +254,15 @@ document.addEventListener('DOMContentLoaded', () => {
             data: sampled.map(d => ((d.dutyTime7dMinutes || 0) / 60).toFixed(1)),
             borderColor: '#10b981',
             tension: 0.3,
+            fill: false
+          },
+          {
+            label: '7-Day Duty Limit (55h)',
+            data: sampled.map(() => 55),
+            borderColor: '#34d399',
+            borderDash: [4, 4],
+            borderWidth: 1.5,
+            pointRadius: 0,
             fill: false
           }
         ]
