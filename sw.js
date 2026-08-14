@@ -4,7 +4,7 @@
  * Regulations valid as of August 2026
  */
 
-const CACHE_NAME = 'oman-air-ftl-v1.2.7'; // Duty terminates at Chocks-on, 30m debrief solely for rest commencement
+const CACHE_NAME = 'oman-air-ftl-v1.2.8'; // Standby Callout support (OM-A 7.1.7.8.f: first 6h no FDP reduction)
 const STATIC_ASSETS = [
   './',
   './index.html',

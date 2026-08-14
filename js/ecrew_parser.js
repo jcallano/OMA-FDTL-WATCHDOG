@@ -3,7 +3,8 @@
  * Supports:
  * 1. eCrew Flight Logbook CSV (Historical Flight Logs in UTC)
  * 2. eCrew Personal Crew Schedule Report (Roster CSV with Local Station time conversion, OFF, SBY, COFF)
- * 3. Intelligent Deduplication & Robust Date Merging (OM-A 7.1.5, OM-A 7.1.7)
+ * 3. Standby Callout Handling (OM-A 7.1.7.8.f/g: first 6h no FDP reduction, FDP starts at airport report time)
+ * 4. Duty Period terminates at Chocks-On; 30m debrief solely marks rest commencement
  * Regulations valid as of August 2026
  */
 
@@ -175,6 +176,7 @@ const eCrewParser = (() => {
 
       const dutyCode = (row[1] || '').trim().toUpperCase();
       const details = (row[2] || '').trim();
+      const reportTimeStr = (row[3] || '').trim();
       const timesStr = (row[4] || '').trim();
 
       // Case A: Day Off (OFF or COFF)
@@ -198,8 +200,16 @@ const eCrewParser = (() => {
         continue;
       }
 
-      // Case B: Home Standby (SBY)
-      if (dutyCode === 'SBY' || details.toLowerCase().includes('standby')) {
+      // Split multi-line items in dutyCode, details, times
+      const detailLines = details.split(/\r\n|\n/).map(l => l.trim()).filter(Boolean);
+      const timeLines = timesStr.split(/\r\n|\n/).map(l => l.trim()).filter(Boolean);
+      const fltNumberLines = dutyCode.split(/\r\n|\n/).map(l => l.trim()).filter(Boolean);
+
+      const hasSby = fltNumberLines.some(f => f.includes('SBY')) || details.toLowerCase().includes('standby');
+      const hasFlights = fltNumberLines.some(f => f !== 'SBY' && !f.includes('OFF') && !f.includes('COFF'));
+
+      // Case B: Pure Home Standby (no flights)
+      if (hasSby && !hasFlights) {
         let sbyStart = isLocalStation ? localTimeToUtc(dateObj.year, dateObj.month, dateObj.day, 0, 0, 0, 'MCT') : new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day, 0, 0));
         let sbyEnd = isLocalStation ? localTimeToUtc(dateObj.year, dateObj.month, dateObj.day, 8, 0, 0, 'MCT') : new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day, 8, 0));
 
@@ -235,17 +245,38 @@ const eCrewParser = (() => {
         continue;
       }
 
-      // Case C: Commercial Flight Sectors
-      const detailLines = details.split(/\r\n|\n/).map(l => l.trim()).filter(Boolean);
-      const timeLines = timesStr.split(/\r\n|\n/).map(l => l.trim()).filter(Boolean);
-      const fltNumberLines = dutyCode.split(/\r\n|\n/).map(l => l.trim()).filter(Boolean);
+      // Case C: Commercial Flights (with or without preceding SBY Callout)
+      let standbyExcessMinutes = 0;
+      let explicitReportUtc = null;
 
-      const numSectors = Math.max(detailLines.length, timeLines.length, 1);
+      if (reportTimeStr) {
+        const repT = parseTime(reportTimeStr);
+        explicitReportUtc = isLocalStation ? localTimeToUtc(dateObj.year, dateObj.month, dateObj.day, repT.h, repT.m, repT.nextDay, 'MCT') : new Date(Date.UTC(dateObj.year, dateObj.month, dateObj.day + repT.nextDay, repT.h, repT.m));
+      }
 
-      for (let sIdx = 0; sIdx < numSectors; sIdx++) {
+      const numItems = Math.max(detailLines.length, timeLines.length, fltNumberLines.length, 1);
+
+      for (let sIdx = 0; sIdx < numItems; sIdx++) {
         const dLine = detailLines[sIdx] || detailLines[0] || 'MCT - MCT';
         const tLine = timeLines[sIdx] || timeLines[0] || '08:00 - 10:00';
         const fltNum = fltNumberLines[sIdx] || fltNumberLines[0] || 'WY';
+
+        // Check if this sub-line is the Standby prefix before callout (e.g. "SBY" / "06:00 - 07:10")
+        if (fltNum === 'SBY' || dLine.toLowerCase().includes('standby') || (hasSby && dLine.trim() === 'MCT - MCT')) {
+          if (tLine.includes('-')) {
+            const parts = tLine.split('-');
+            const st = parseTime(parts[0]);
+            const et = parseTime(parts[1]);
+            let sbyDur = (et.h * 60 + et.m) - (st.h * 60 + st.m);
+            if (sbyDur < 0) sbyDur += 24 * 60;
+            // OM-A 7.1.7.8(g): Standby exceeding 6 hours reduces maximum FDP
+            if (sbyDur > 6 * 60) {
+              standbyExcessMinutes = sbyDur - 6 * 60;
+            }
+          }
+          // Do not add SBY pseudo-flight sector to sector list
+          continue;
+        }
 
         let depApt = 'MCT';
         let arrApt = 'MCT';
@@ -298,7 +329,9 @@ const eCrewParser = (() => {
           isSimulator: false,
           isDayOff: false,
           isStandby: false,
-          dutyCode: fltNum
+          dutyCode: fltNum,
+          explicitReportUtc: explicitReportUtc,
+          standbyExcessMinutes: standbyExcessMinutes
         });
       }
     }
@@ -358,15 +391,11 @@ const eCrewParser = (() => {
     return `${dateKey}_${s.depAirport}_${s.arrAirport}_${cleanDuty || 'FLT'}`;
   }
 
-  /**
-   * Smart Merge: Combines newly parsed sectors with existing sectors without duplicate flights.
-   */
   function mergeSectors(existingDuties, newSectors) {
     const sectorMap = new Map();
     let updatedCount = 0;
     let addedCount = 0;
 
-    // 1. Hydrate existing sectors
     (existingDuties || []).forEach(d => {
       (d.sectors || []).forEach(s => {
         const hydrated = {
@@ -378,7 +407,6 @@ const eCrewParser = (() => {
       });
     });
 
-    // 2. Upsert new sectors
     (newSectors || []).forEach(s => {
       const hydrated = {
         ...s,
@@ -412,7 +440,6 @@ const eCrewParser = (() => {
   function groupSectorsIntoDuties(sectors) {
     if (!sectors || sectors.length === 0) return [];
 
-    // Ensure all sectors have valid Date objects
     const cleaned = sectors.map(s => ({
       ...s,
       depTimeUtc: (s.depTimeUtc instanceof Date) ? s.depTimeUtc : new Date(s.depTimeUtc),
@@ -510,12 +537,13 @@ const eCrewParser = (() => {
     const repOffset = (typeof FTLRules !== 'undefined') ? FTLRules.getReportingOffsetMinutes(first.depAirport, isSim) : (first.depAirport === 'MCT' ? 75 : 60);
     const chkOffset = (typeof FTLRules !== 'undefined') ? FTLRules.getCheckoutOffsetMinutes(isSim) : 30;
 
-    const reportUtc = new Date(first.depTimeUtc.getTime() - repOffset * 60 * 1000);
+    // Use explicit report time if notified in roster (e.g. Callout from Standby), otherwise departure minus offset
+    const reportUtc = first.explicitReportUtc || new Date(first.depTimeUtc.getTime() - repOffset * 60 * 1000);
     // Checkout marks the release time when rest begins (Chocks On + 30 min)
     const checkoutUtc = new Date(last.arrTimeUtc.getTime() + chkOffset * 60 * 1000);
 
     const fdpMin = Math.max(0, Math.round((last.arrTimeUtc.getTime() - reportUtc.getTime()) / (60 * 1000)));
-    // Duty Period terminates at Chocks-On for flight operations (does not include the 30 min debrief buffer)
+    // Duty Period terminates at Chocks-On for flight operations
     const dutyMin = isSim ? Math.max(0, Math.round((checkoutUtc.getTime() - reportUtc.getTime()) / (60 * 1000))) : fdpMin;
     const fltMin = sectors.reduce((acc, s) => acc + (s.flightTimeMinutes || 0), 0);
     const factored = (typeof FTLRules !== 'undefined') ? FTLRules.calculateFactoredSectors(sectors, true) : sectors.length;
@@ -546,6 +574,7 @@ const eCrewParser = (() => {
       sectorCount: sectors.length,
       factoredSectors: factored,
       summaryRoute: summaryRoute,
+      standbyExcessMinutes: first.standbyExcessMinutes || 0,
       violations: [],
       warnings: [],
       status: 'OK'
@@ -652,14 +681,16 @@ const eCrewParser = (() => {
         dp.fdpMarginMinutes = 0;
       } else {
         const maxFdp = (typeof FTLRules !== 'undefined') ? FTLRules.getMaxFdpMinutes(dp.reportTimeUtc, dp.factoredSectors, true) : (13 * 60);
-        dp.maxFdpMinutes = maxFdp;
-        dp.fdpMarginMinutes = maxFdp - dp.fdpDurationMinutes;
+        // OM-A 7.1.7.8(g): Standby exceeding 6 hours reduces maximum allowable FDP
+        const effectiveMaxFdp = Math.max(0, maxFdp - (dp.standbyExcessMinutes || 0));
+        dp.maxFdpMinutes = effectiveMaxFdp;
+        dp.fdpMarginMinutes = effectiveMaxFdp - dp.fdpDurationMinutes;
 
-        if (dp.fdpDurationMinutes > maxFdp) {
+        if (dp.fdpDurationMinutes > effectiveMaxFdp) {
           dp.violations.push({
             category: 'FDP_LIMIT',
             title: 'Maximum Daily FDP Exceeded',
-            detail: `Actual FDP of ${(typeof FTLRules !== 'undefined') ? FTLRules.formatMinutesToHM(dp.fdpDurationMinutes) : dp.fdpDurationMinutes + 'm'} exceeded Table A limit of ${(typeof FTLRules !== 'undefined') ? FTLRules.formatMinutesToHM(maxFdp) : maxFdp + 'm'}.`,
+            detail: `Actual FDP of ${(typeof FTLRules !== 'undefined') ? FTLRules.formatMinutesToHM(dp.fdpDurationMinutes) : dp.fdpDurationMinutes + 'm'} exceeded Table A limit of ${(typeof FTLRules !== 'undefined') ? FTLRules.formatMinutesToHM(effectiveMaxFdp) : effectiveMaxFdp + 'm'}.`,
             ref: 'OM-A 7.1.6.9 (Table A)',
             margin: (typeof FTLRules !== 'undefined') ? FTLRules.formatMinutesToHM(dp.fdpMarginMinutes) : dp.fdpMarginMinutes + 'm'
           });
@@ -667,7 +698,7 @@ const eCrewParser = (() => {
           dp.warnings.push({
             category: 'FDP_LIMIT',
             title: 'Tight FDP Margin',
-            detail: `Used ${Math.round(dp.fdpDurationMinutes / maxFdp * 100)}% of allowable FDP. Remaining margin: ${(typeof FTLRules !== 'undefined') ? FTLRules.formatMinutesToHM(dp.fdpMarginMinutes) : dp.fdpMarginMinutes + 'm'}.`,
+            detail: `Used ${Math.round(dp.fdpDurationMinutes / effectiveMaxFdp * 100)}% of allowable FDP. Remaining margin: ${(typeof FTLRules !== 'undefined') ? FTLRules.formatMinutesToHM(dp.fdpMarginMinutes) : dp.fdpMarginMinutes + 'm'}.`,
             ref: 'OM-A 7.1.6.9 (Table A)',
             margin: (typeof FTLRules !== 'undefined') ? FTLRules.formatMinutesToHM(dp.fdpMarginMinutes) : dp.fdpMarginMinutes + 'm'
           });
