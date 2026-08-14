@@ -4,7 +4,7 @@
  * Regulations valid as of August 2026
  */
 
-const CACHE_NAME = 'oman-air-ftl-v1.2.8'; // Standby Callout support (OM-A 7.1.7.8.f: first 6h no FDP reduction)
+const CACHE_NAME = 'oman-air-ftl-v1.2.9'; // Added Reset Data & Force Live Update button
 const STATIC_ASSETS = [
   './',
   './index.html',

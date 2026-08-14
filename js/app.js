@@ -768,4 +768,35 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Settings saved successfully!');
     });
   }
+
+  async function clearDataAndForceUpdate() {
+    const ok = confirm('⚠️ Reset All Data & Force Update?\n\nThis will:\n1. Clear all local stored flight & duty data\n2. Purge Service Worker & Browser Cache\n3. Force fresh live download of latest code from GitHub Pages\n\nDo you want to proceed?');
+    if (!ok) return;
+
+    try {
+      localStorage.clear();
+
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (let registration of registrations) {
+          await registration.unregister();
+        }
+      }
+
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        for (let name of cacheNames) {
+          await caches.delete(name);
+        }
+      }
+    } catch (err) {
+      console.error('Error while clearing data and cache:', err);
+    }
+
+    // Force hard reload bypassing cache
+    window.location.href = window.location.origin + window.location.pathname + '?v=' + Date.now();
+  }
+
+  document.getElementById('btnClearDataAndUpdate')?.addEventListener('click', clearDataAndForceUpdate);
+  document.getElementById('btnBannerReset')?.addEventListener('click', clearDataAndForceUpdate);
 });
