@@ -427,104 +427,109 @@
         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
           <div>
             <div class="card-title" style="font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-              <span>📚</span> Guía y Manual de Usuario Offline
+              <span>📚</span> User Manual & Regulatory Reference
             </div>
-            <div class="card-subtitle">Oman Air OM-A Capítulo 7 • Regulaciones válidas a Agosto 2026 (Base: MCT UTC+4)</div>
+            <div class="card-subtitle">Oman Air OM-A Chapter 7 • Flight Time Limitations & Standby Rules (Base: MCT UTC+4 • Valid August 2026)</div>
           </div>
           <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 11px;">
-            ✓ Disponible 100% Sin Conexión
+            ✓ 100% Offline Access
           </span>
         </div>
       </div>
 
-      <!-- Section 1: Marco Reglamentario -->
+      <!-- Section 1: Regulatory Framework -->
       <div class="card" style="margin-bottom: 16px;">
         <div class="card-title" style="color: var(--primary); font-size: 14.5px; margin-bottom: 10px;">
-          1. Marco Reglamentario y Alcance
+          1. Regulatory Framework & Scope
         </div>
         <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.6;">
-          Esta Progressive Web App (PWA) permite a las tripulaciones de mando y vuelo de Oman Air auditar sus programaciones mensuales (<strong>Rosters</strong>), bitácoras históricas (<strong>Logbooks</strong>) y cambios operacionales de última hora mediante el <strong>Simulador "What-If"</strong>.
+          This Progressive Web Application (PWA) is engineered for Oman Air flight and cabin crews to audit, track, and simulate the regulatory legality of monthly rosters, historical flight logs, and last-minute schedule modifications (via the <strong>What-If Simulator</strong>).
         </p>
         <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.6; margin-top: 8px;">
-          Todos los algoritmos de validación implementan rigurosamente las normas del <strong>Manual de Operaciones Parte A (OM-A), Capítulo 7</strong> con base principal en <strong>Mascate (MCT, UTC+4)</strong>.
+          All calculation rules and limits strictly implement the requirements of the <strong>Oman Air Operations Manual Part A (OM-A), Chapter 7</strong> based on Muscat Main Base (<strong>MCT, UTC+4</strong>), valid as of <strong>August 2026</strong>.
         </p>
       </div>
 
-      <!-- Section 2: Límites Acumulativos -->
+      <!-- Section 2: Cumulative Limits -->
       <div class="card" style="margin-bottom: 16px;">
         <div class="card-title" style="color: var(--primary); font-size: 14.5px; margin-bottom: 10px;">
-          2. Límites Reglamentarios Acumulativos (OM-A 7.1.4 y 7.1.5)
+          2. Cumulative Flight & Duty Limits (OM-A 7.1.4 & 7.1.5)
         </div>
         <div class="table-responsive">
           <table>
             <thead>
               <tr>
-                <th>Límite Operativo</th>
-                <th>Máximo Permitido</th>
-                <th>Alerta Preventiva</th>
-                <th>Referencia OM-A</th>
+                <th>Operational Limit</th>
+                <th>Maximum Allowable</th>
+                <th>Warning Threshold</th>
+                <th>OM-A Reference</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td><strong>Tiempo de Vuelo en 28 Días</strong></td>
-                <td><span class="badge badge-tight">100 Horas</span></td>
-                <td>90 Horas (90%)</td>
+                <td><strong>28-Day Flight Time</strong></td>
+                <td><span class="badge badge-tight">100 Hours</span></td>
+                <td>90 Hours (90%)</td>
                 <td>OM-A 7.1.4(1)</td>
               </tr>
               <tr>
-                <td><strong>Tiempo de Vuelo en 12 Meses</strong></td>
-                <td><span class="badge badge-tight">900 Horas</span></td>
-                <td>850 Horas</td>
+                <td><strong>12-Month Flight Time</strong></td>
+                <td><span class="badge badge-tight">900 Hours</span></td>
+                <td>850 Hours</td>
                 <td>OM-A 7.1.4(2)</td>
               </tr>
               <tr>
-                <td><strong>Tiempo de Servicio en 7 Días</strong></td>
-                <td><span class="badge badge-tight">55 Horas</span></td>
-                <td>50 Horas</td>
+                <td><strong>7-Day Duty Period</strong></td>
+                <td><span class="badge badge-tight">55 Hours</span></td>
+                <td>50 Hours</td>
                 <td>OM-A 7.1.4(3)</td>
               </tr>
               <tr>
-                <td><strong>Tiempo de Servicio en 14 Días</strong></td>
-                <td><span class="badge badge-tight">95 Horas</span></td>
-                <td>85 Horas</td>
+                <td><strong>14-Day Duty Period</strong></td>
+                <td><span class="badge badge-tight">95 Hours</span></td>
+                <td>85 Hours</td>
                 <td>OM-A 7.1.4(4)</td>
               </tr>
               <tr>
-                <td><strong>Tiempo de Servicio en 28 Días</strong></td>
-                <td><span class="badge badge-tight">190 Horas</span></td>
-                <td>175 Horas</td>
+                <td><strong>28-Day Duty Period</strong></td>
+                <td><span class="badge badge-tight">190 Hours</span></td>
+                <td>175 Hours</td>
                 <td>OM-A 7.1.4(5)</td>
               </tr>
               <tr>
-                <td><strong>Días Consecutivos de Servicio</strong></td>
-                <td><span class="badge badge-violation">Máx 7 Días</span></td>
-                <td>Día 7</td>
+                <td><strong>Consecutive Duty Days</strong></td>
+                <td><span class="badge badge-violation">Max 7 Days</span></td>
+                <td>Day 7</td>
                 <td>OM-A 7.1.5(1)</td>
               </tr>
               <tr>
-                <td><strong>Descanso Previo Mínimo</strong></td>
-                <td colspan="2">$\ge \max(\text{Servicio Anterior}, 12\text{h})$ en Base</td>
+                <td><strong>Preceding Minimum Rest</strong></td>
+                <td colspan="2">$\ge \max(\text{Previous Duty Duration}, 12\text{h})$ at Base</td>
                 <td>OM-A 7.1.6.4</td>
+              </tr>
+              <tr>
+                <td><strong>Statutory Day Off</strong></td>
+                <td colspan="2">$\ge 34\text{ Consecutive Hours}$ including 2 Local Nights at Base</td>
+                <td>OM-A 7.1.5</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- Section 3: Tabla A FDP -->
+      <!-- Section 3: Table A Maximum Daily FDP -->
       <div class="card" style="margin-bottom: 16px;">
         <div class="card-title" style="color: var(--primary); font-size: 14.5px; margin-bottom: 10px;">
-          3. FDP Máximo Diario y Regla de Calzos Puestos (OM-A 7.1.6.9 - Tabla A)
+          3. Maximum Daily FDP & Chocks-On Principle (OM-A 7.1.6.9 - Table A)
         </div>
         <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 10px;">
-          El Periodo de Servicio de Vuelo (<strong>FDP</strong>) inicia a la hora de presentación reglamentaria (<strong>Report Time</strong>) y <strong>termina estrictamente en Calzos Puestos (Chocks-On) del último vuelo comercial</strong>. Los 30 minutos de post-vuelo (Debrief) marcan la hora de inicio a partir de la cual se cronometra el descanso previo hacia el siguiente vuelo.
+          A Flight Duty Period (<strong>FDP</strong>) commences at the designated reporting time and <strong>terminates strictly at Chocks-On (in-block) of the final commercial sector</strong>. The subsequent 30-minute post-flight debrief period does not extend the FDP, but establishes the exact release timestamp from which mandatory preceding rest commences for the subsequent duty.
         </p>
         <div class="table-responsive">
           <table>
             <thead>
               <tr>
-                <th>Hora Local Reporte (Base MCT)</th>
+                <th>Local Report Time (Base MCT)</th>
                 <th>1 Sector</th>
                 <th>2 Sectores</th>
                 <th>3 Sectores</th>
@@ -572,44 +577,44 @@
         </div>
       </div>
 
-      <!-- Section 4: Guardias y Activaciones -->
+      <!-- Section 4: Standby & Callouts -->
       <div class="card" style="margin-bottom: 16px;">
         <div class="card-title" style="color: var(--primary); font-size: 14.5px; margin-bottom: 10px;">
-          4. Guardias y Activaciones (Standby & Callouts - OM-A 7.1.7)
+          4. Standby Duties & Callouts (OM-A 7.1.7)
         </div>
         <ul style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.65; padding-left: 18px;">
-          <li><strong>Home Standby (`SBY`):</strong> Se computa al <strong>25% de crédito</strong> para los acumulados de servicio de 7d, 14d y 28d (OM-A 7.1.7.8.c).</li>
-          <li><strong>Regla de las 6 Horas en Activaciones (Callout):</strong>
+          <li><strong>Home Standby (`SBY`):</strong> Credited at <strong>25% towards cumulative duty limits</strong> (7d, 14d, 28d) per OM-A 7.1.7.8(c).</li>
+          <li><strong>The 6-Hour Callout Rule:</strong>
             <ul>
-              <li>Si te llaman dentro de las primeras <strong>6 horas</strong> de guardia: El FDP máximo de la Tabla A <strong>no se reduce</strong> y el FDP comienza desde la hora de presentación en el aeropuerto (OM-A 7.1.7.8.f).</li>
-              <li>Si te llaman tras más de <strong>6 horas</strong> de guardia: El FDP máximo permitido de la Tabla A se reduce minuto a minuto por el tiempo de guardia que excedió las 6 horas (OM-A 7.1.7.8.g).</li>
+              <li><strong>Callout within the first 6 hours:</strong> Maximum allowable FDP is not reduced, and FDP counts from airport reporting time (OM-A 7.1.7.8.f).</li>
+              <li><strong>Callout after 6 hours:</strong> Maximum allowable Table A FDP is reduced minute-by-minute for all standby time exceeding 6 hours (OM-A 7.1.7.8.g).</li>
             </ul>
           </li>
-          <li><strong>Airport Standby:</strong> Cuenta al <strong>100%</strong> como tiempo de servicio (OM-A 7.1.7.4).</li>
+          <li><strong>Airport Standby:</strong> Counts at <strong>100% duty credit</strong> (OM-A 7.1.7.4).</li>
         </ul>
       </div>
 
-      <!-- Section 5: Uso del Logbook y Funciones Pro -->
+      <!-- Section 5: eCrew Importer & Smart Logbook -->
       <div class="card" style="margin-bottom: 16px;">
         <div class="card-title" style="color: var(--primary); font-size: 14.5px; margin-bottom: 10px;">
-          5. Funcionalidades del Logbook y Tarjetas Emergentes
+          5. eCrew Schedule Importer & Smart Logbook
         </div>
         <ul style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.65; padding-left: 18px;">
-          <li><strong>Línea Divisoria `📍 TODAY`:</strong> Divide automáticamente el pasado (vuelos completados) del futuro (programación roster).</li>
-          <li><strong>Tarjeta Emergente al Pasar el Ratón (PC):</strong> Pasa el puntero sobre cualquier vuelo para ver el desglose en tiempo real, margen legal, descanso previo y días consecutivos.</li>
-          <li><strong>Modal Inspector (Móvil y PC):</strong> Haz clic en cualquier fila para inspeccionar el informe completo.</li>
-          <li><strong>Fusión Inteligente sin Duplicados:</strong> Puedes importar múltiples meses o actualizar el mes corriente tantas veces como desees sin duplicar sectores.</li>
-          <li><strong>Botón `🔄 Reset & Update`:</strong> Limpia la base local y fuerza la descarga limpia de la última versión en vivo desde GitHub Pages.</li>
+          <li><strong>Roster Parsing & Days Off:</strong> Automatically detects <code>OFF</code> and <code>COFF</code> days, highlighted in green badges, and resets consecutive duty day counters to zero.</li>
+          <li><strong>Station Local Time to UTC Conversion:</strong> Auto-converts station local times in eCrew reports to UTC based on international IATA airport databases (<code>ZRH</code>, <code>BLR</code>, <code>RUH</code>, <code>TAS</code>, <code>TZX</code>, <code>DXB</code>, etc.).</li>
+          <li><strong>Smart Deduplication:</strong> Multiple monthly rosters or overlapping logs can be imported safely; old entries are updated without creating duplicate sectors.</li>
+          <li><strong>Interactive Timeline & Desktop Hover Cards:</strong> Move the mouse over any duty row to inspect real-time legal margins, preceding rest, and consecutive duty count.</li>
+          <li><strong>Reset & Update Tool:</strong> Purges local database and browser cache, forcing an instant live download of the latest code from GitHub Pages.</li>
         </ul>
       </div>
 
-      <!-- Section 6: Privacidad y Soporte Offline -->
+      <!-- Section 6: Data Privacy & Offline Operations -->
       <div class="card" style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.25);">
         <div class="card-title" style="color: var(--primary); font-size: 14.5px; margin-bottom: 8px;">
-          🔒 Privacidad Total y Funcionamiento Offline
+          🔒 100% Client-Side Privacy & Full Offline Functionality
         </div>
         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.55;">
-          Toda tu información de vuelos se almacena <strong>estrictamente en tu propio dispositivo</strong> (`LocalStorage`). No se envía ningún dato a servidores externos. La aplicación y este manual están completamente cacheados y disponibles para su uso sin conexión a internet durante tus vuelos y escalas.
+          All roster schedules and flight log data are stored strictly within your browser's private local storage (<code>LocalStorage</code>). No flight hours or personal schedules are transmitted to external servers. The app, database, and this manual operate entirely offline during flights and layovers.
         </p>
       </div>
     </main>
