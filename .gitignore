@@ -1,0 +1,8 @@
+# Private logs, PDFs, and raw personal files
+*.csv
+*.pdf
+*.log
+scratch/
+.system_generated/
+.DS_Store
+Thumbs.db

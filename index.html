@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Oman Air FTL - Legality Simulator & Duty Monitor</title>
+  
+  <!-- PWA Metadata -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#050811">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="OmanAir FTL">
+  <link rel="apple-touch-icon" href="./manifest.json">
+
+  <!-- Typography & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Styles & Chart.js -->
+  <link rel="stylesheet" href="./css/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Top Navigation Bar -->
+    <header class="navbar">
+      <div class="nav-brand">
+        <div class="brand-icon">OM</div>
+        <div class="brand-info">
+          <h1>Oman Air FTL</h1>
+          <span>OM-A Chapter 7 • Flight Limits & Simulator</span>
+        </div>
+      </div>
+
+      <!-- Desktop Navigation Tabs (Hidden on mobile) -->
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-tab="tab-dashboard">
+          <span>📊</span> Dashboard
+        </button>
+        <button class="nav-tab" data-tab="tab-simulator">
+          <span>⚡</span> What-If Simulator
+        </button>
+        <button class="nav-tab" data-tab="tab-logbook">
+          <span>📖</span> Logbook
+        </button>
+        <button class="nav-tab" data-tab="tab-importer">
+          <span>📥</span> eCrew Import
+        </button>
+        <button class="nav-tab" data-tab="tab-settings">
+          <span>⚙️</span> Settings
+        </button>
+      </nav>
+
+      <!-- Actions & Offline Status -->
+      <div class="nav-actions">
+        <span class="badge-offline">
+          <span class="dot-pulse"></span> Offline
+        </span>
+        <button id="btnInstallApp" class="btn-install">
+          <span>📲</span> Install
+        </button>
+      </div>
+    </header>
+
+    <!-- Regulation Validity Banner Notice -->
+    <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); padding: 8px 14px; border-radius: 10px; margin-bottom: 12px; font-size: 11.5px; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+      <div>
+        <span>ℹ️ <strong>OM-A Regulatory Notice:</strong> Calculations and Table A limits are based on <strong>Oman Air OM-A Chapter 7 (Regulations valid as of August 2026)</strong>.</span>
+      </div>
+      <span class="mono" style="font-size: 10.5px; color: var(--primary);">Base: MCT (UTC+4)</span>
+    </div>
+
+    <!-- TAB 1: DASHBOARD -->
+    <main id="tab-dashboard" class="tab-content active">
+      
+      <!-- Top Gauges / KPI Grid -->
+      <div class="kpi-grid">
+        <!-- 28-Day Flight Hours -->
+        <div class="kpi-card">
+          <div class="kpi-top">
+            <div class="kpi-label">28-Day Flight</div>
+            <div class="kpi-limit-badge">100h MAX</div>
+          </div>
+          <div class="kpi-value" id="dashFlt28Value">--:--</div>
+          <div class="kpi-progress">
+            <div id="dashFlt28Bar" class="kpi-bar bg-ok" style="width: 0%;"></div>
+          </div>
+          <div class="kpi-sub">
+            <span id="dashFlt28Sub">0h of 100h</span>
+            <strong id="dashFlt28Rem">-- left</strong>
+          </div>
+        </div>
+
+        <!-- 7-Day Duty Hours -->
+        <div class="kpi-card">
+          <div class="kpi-top">
+            <div class="kpi-label">7-Day Duty</div>
+            <div class="kpi-limit-badge">55h MAX</div>
+          </div>
+          <div class="kpi-value" id="dashDuty7Value">--:--</div>
+          <div class="kpi-progress">
+            <div id="dashDuty7Bar" class="kpi-bar bg-ok" style="width: 0%;"></div>
+          </div>
+          <div class="kpi-sub">
+            <span id="dashDuty7Sub">0h of 55h</span>
+            <strong id="dashDuty7Rem">-- left</strong>
+          </div>
+        </div>
+
+        <!-- 14-Day Duty Hours -->
+        <div class="kpi-card">
+          <div class="kpi-top">
+            <div class="kpi-label">14-Day Duty</div>
+            <div class="kpi-limit-badge">95h MAX</div>
+          </div>
+          <div class="kpi-value" id="dashDuty14Value">--:--</div>
+          <div class="kpi-progress">
+            <div id="dashDuty14Bar" class="kpi-bar bg-ok" style="width: 0%;"></div>
+          </div>
+          <div class="kpi-sub">
+            <span id="dashDuty14Sub">0h of 95h</span>
+            <span>OM-A 7.1.4</span>
+          </div>
+        </div>
+
+        <!-- 28-Day Duty Hours -->
+        <div class="kpi-card">
+          <div class="kpi-top">
+            <div class="kpi-label">28-Day Duty</div>
+            <div class="kpi-limit-badge">190h MAX</div>
+          </div>
+          <div class="kpi-value" id="dashDuty28Value">--:--</div>
+          <div class="kpi-progress">
+            <div id="dashDuty28Bar" class="kpi-bar bg-ok" style="width: 0%;"></div>
+          </div>
+          <div class="kpi-sub">
+            <span id="dashDuty28Sub">0h of 190h</span>
+            <span>OM-A 7.1.4</span>
+          </div>
+        </div>
+
+        <!-- Consecutive Duty Days -->
+        <div class="kpi-card" style="grid-column: span 1;">
+          <div class="kpi-top">
+            <div class="kpi-label">Consecutive Duty</div>
+            <div class="kpi-limit-badge">7d MAX</div>
+          </div>
+          <div class="kpi-value" id="dashConsecValue">0 Days</div>
+          <div class="kpi-sub">
+            <span id="dashConsecSub">Days off required after 7d</span>
+            <span>OM-A 7.1.5</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Historical Trend Chart & Overview -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>📈</span> Rolling 28-Day Trends vs Legal Caps
+          </div>
+          <div>
+            <span class="badge badge-warning" id="dashViolationsBadge">0 Violations</span>
+            <span class="badge badge-legal" id="dashTotalDutiesBadge">0 Duties</span>
+          </div>
+        </div>
+        <div style="height: 240px; width: 100%;">
+          <canvas id="trendChart"></canvas>
+        </div>
+      </div>
+    </main>
+
+    <!-- TAB 2: WHAT-IF SIMULATOR -->
+    <main id="tab-simulator" class="tab-content">
+      <div class="simulator-layout">
+        
+        <!-- Left Column: Draft Duty Builder -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span>✈️</span> Propose Draft Flight / Change
+            </div>
+            <button type="button" id="btnResetSim" class="btn-secondary" style="padding:4px 10px;font-size:11.5px;">Reset</button>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Duty Date</label>
+              <input type="date" id="simDate" class="form-control" value="2026-08-15">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Duty Nature</label>
+              <select id="simDutyType" class="form-control">
+                <option value="FLIGHT">Commercial Flight</option>
+                <option value="SIMULATOR">Simulator Session (SIM)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card-title" style="font-size:13.5px;margin-bottom:10px;">
+            <span>📍</span> Flight Sectors (Block Times in UTC)
+          </div>
+
+          <!-- Dynamic Sectors Container -->
+          <div id="simSectorsContainer"></div>
+
+          <button type="button" id="btnAddSimSector" class="btn-add-sector">
+            + Add Sector to this Duty
+          </button>
+
+          <button type="button" id="btnCommitSimDuty" class="btn-primary" style="width:100%;">
+            <span>💾</span> Commit to My Logbook
+          </button>
+        </div>
+
+        <!-- Right Column: Live Legality Verdict & Metrics -->
+        <div>
+          <!-- Verdict Box -->
+          <div id="simVerdictBox" class="verdict-box legal">
+            <div class="verdict-header">
+              <span id="simVerdictBadge" class="verdict-badge legal">LEGAL</span>
+              <span id="simVerdictTitle" class="verdict-title">LEGAL ASSIGNMENT (Safe Margin)</span>
+            </div>
+            <ul id="simVerdictList" class="verdict-detail-list">
+              <!-- Dynamic checklist -->
+            </ul>
+          </div>
+
+          <!-- Simulator Metrics Grid -->
+          <div class="sim-metrics-grid">
+            <div class="sim-metric-card">
+              <div class="sim-metric-label">Planned FDP / Max Allowed</div>
+              <div class="sim-metric-val" id="simFdpVal">--:--</div>
+            </div>
+            <div class="sim-metric-card">
+              <div class="sim-metric-label">Remaining FDP Margin</div>
+              <div class="sim-metric-val" id="simFdpMarginVal">--:--</div>
+            </div>
+            <div class="sim-metric-card">
+              <div class="sim-metric-label">Preceding Rest Obtained</div>
+              <div class="sim-metric-val" id="simPrecedingRestVal">--:--</div>
+            </div>
+            <div class="sim-metric-card">
+              <div class="sim-metric-label">Subsequent Rest Required</div>
+              <div class="sim-metric-val" id="simSubsequentRestVal">--:--</div>
+            </div>
+            <div class="sim-metric-card">
+              <div class="sim-metric-label">Projected 28d Flight</div>
+              <div class="sim-metric-val" id="simProjFlt28Val">--:--</div>
+            </div>
+            <div class="sim-metric-card">
+              <div class="sim-metric-label">Projected 7d Duty</div>
+              <div class="sim-metric-val" id="simProjDuty7Val">--:--</div>
+            </div>
+          </div>
+
+          <div class="card" style="padding:12px;">
+            <div style="font-size:12px;color:var(--text-secondary);display:flex;justify-content:space-between;align-items:center;">
+              <span>Reporting Time (OM-A 7.1.10):</span>
+              <strong id="simReportLocalVal" class="mono">--:--</strong>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- TAB 3: LOGBOOK -->
+    <main id="tab-logbook" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>📖</span> Flight Logbook & Duty Periods
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button id="btnExportCsv" class="btn-secondary" style="padding:4px 10px;font-size:11.5px;">CSV</button>
+            <button id="btnExportJson" class="btn-secondary" style="padding:4px 10px;font-size:11.5px;">JSON</button>
+          </div>
+        </div>
+
+        <!-- Filters & Search -->
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;justify-content:space-between;align-items:center;">
+          <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;">
+            <button class="btn-secondary btn-filter active" data-status="ALL" style="padding:4px 10px;font-size:11.5px;">All</button>
+            <button class="btn-secondary btn-filter" data-status="VIOLATION" style="padding:4px 10px;font-size:11.5px;">Violations</button>
+            <button class="btn-secondary btn-filter" data-status="WARNING" style="padding:4px 10px;font-size:11.5px;">Tight</button>
+            <button class="btn-secondary btn-filter" data-status="OK" style="padding:4px 10px;font-size:11.5px;">Legal</button>
+          </div>
+          <div style="width:100%;max-width:240px;">
+            <input type="text" id="logbookSearch" class="form-control" placeholder="Search route, date..." style="padding:6px 10px;font-size:12.5px;">
+          </div>
+        </div>
+
+        <!-- Logbook Table -->
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Date</th>
+                <th>Route</th>
+                <th>Report UTC</th>
+                <th>Checkout UTC</th>
+                <th>FDP / Max</th>
+                <th>Preceding Rest</th>
+                <th>28d Flight</th>
+                <th>7d Duty</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="logbookTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <!-- TAB 4: eCREW IMPORTER -->
+    <main id="tab-importer" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>📥</span> Import Flight Logs from eCrew
+          </div>
+        </div>
+
+        <p style="color:var(--text-secondary);font-size:13px;margin-bottom:14px;">
+          Upload your exported CSV file from eCrew or paste the raw clipboard text below. Your flight history is stored <strong>permanently on this device</strong> (in your browser's private local storage) and will remain available every time you open the app, even completely offline.
+        </p>
+
+        <!-- Dropzone -->
+        <div id="csvDropzone" class="dropzone">
+          <div class="dropzone-icon">📁</div>
+          <h3 style="font-size:15px;">Drag & Drop eCrew CSV file here</h3>
+          <p style="color:var(--text-muted);font-size:12px;margin-top:4px;">or tap to browse files</p>
+          <input type="file" id="csvFileInput" accept=".csv,.txt" style="display:none;">
+        </div>
+
+        <!-- Paste Textarea -->
+        <div class="form-group">
+          <label class="form-label">Or Paste eCrew Logbook Text Directly:</label>
+          <textarea id="clipboardText" class="form-control" rows="4" placeholder="Date,Airport,Time,Airport,Time,Type,Reg.,Flt time..."></textarea>
+        </div>
+
+        <button type="button" id="btnParseClipboard" class="btn-primary" style="width:100%;">
+          <span>🚀</span> Process & Store in Local Logbook
+        </button>
+      </div>
+    </main>
+
+    <!-- TAB 5: SETTINGS & DISCLAIMER -->
+    <main id="tab-settings" class="tab-content">
+      <div class="card" style="max-width: 540px; margin: 0 auto 16px auto;">
+        <div class="card-header">
+          <div class="card-title">
+            <span>⚙️</span> Pilot Profile & Base Settings
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Pilot Profile</label>
+          <input type="text" id="settingsPilotName" class="form-control" value="Captain B737">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Home Base Airport</label>
+            <input type="text" id="settingsBase" class="form-control" value="MCT" readonly>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Primary Fleet</label>
+            <input type="text" id="settingsFleet" class="form-control" value="B737" readonly>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;margin-top:16px;">
+          <button type="button" id="btnSaveSettings" class="btn-primary">Save Profile</button>
+          <button type="button" id="btnClearData" class="btn-secondary" style="color:var(--danger);">Clear Local Data</button>
+        </div>
+      </div>
+
+      <!-- Aviation Legal Disclaimer Card -->
+      <div class="card" style="max-width: 540px; margin: 0 auto; background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.25);">
+        <div class="card-title" style="color: #fca5a5; font-size: 14px; margin-bottom: 8px;">
+          <span>⚠️</span> Important Aviation Legal Disclaimer
+        </div>
+        <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.55;">
+          <strong>USE AT YOUR OWN RISK:</strong> This application is an independent decision-support tool designed for informational and planning purposes only. While calculations strictly implement <strong>Oman Air OM-A Chapter 7 (valid as of August 2026)</strong>, algorithmic discrepancies, data entry errors, or unexpected operational changes may occur.
+        </p>
+        <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.55; margin-top: 8px;">
+          The pilot-in-command and crew members remain solely responsible for verifying the regulatory legality of their duty and rest periods against official company systems (<strong>eCrew</strong>) and published flight operations manuals before undertaking any flight duty. The authors and developers assume no liability for operational delays, regulatory violations, or administrative penalties.
+        </p>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Mobile Bottom Navigation Bar -->
+  <nav class="mobile-bottom-bar">
+    <button class="mobile-nav-btn active" data-tab="tab-dashboard">
+      <span class="icon">📊</span>
+      <span>Dashboard</span>
+    </button>
+    <button class="mobile-nav-btn" data-tab="tab-simulator">
+      <span class="icon">⚡</span>
+      <span>Simulator</span>
+    </button>
+    <button class="mobile-nav-btn" data-tab="tab-logbook">
+      <span class="icon">📖</span>
+      <span>Logbook</span>
+    </button>
+    <button class="mobile-nav-btn" data-tab="tab-importer">
+      <span class="icon">📥</span>
+      <span>Import</span>
+    </button>
+    <button class="mobile-nav-btn" data-tab="tab-settings">
+      <span class="icon">⚙️</span>
+      <span>Settings</span>
+    </button>
+  </nav>
+
+  <!-- Detail Modal Overlay -->
+  <div id="modalOverlay" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h2 id="modalTitle" style="font-size:16px;font-weight:700;">Duty Assignment Details</h2>
+          <div id="modalSubtitle" style="font-size:11.5px;color:var(--text-muted);margin-top:2px;"></div>
+        </div>
+        <button id="btnModalClose" class="btn-close">&times;</button>
+      </div>
+
+      <div id="modalAlerts"></div>
+
+      <div class="sim-metrics-grid">
+        <div class="sim-metric-card">
+          <div class="sim-metric-label">FDP Executed vs Allowed</div>
+          <div class="sim-metric-val" id="modalFdpInfo" style="font-size:13.5px;">--</div>
+        </div>
+        <div class="sim-metric-card">
+          <div class="sim-metric-label">Preceding Rest Obtained</div>
+          <div class="sim-metric-val" id="modalRestInfo" style="font-size:13.5px;">--</div>
+        </div>
+        <div class="sim-metric-card">
+          <div class="sim-metric-label">28-Day Flight Accumulated</div>
+          <div class="sim-metric-val" id="modalFlt28Info" style="font-size:13.5px;">--</div>
+        </div>
+        <div class="sim-metric-card">
+          <div class="sim-metric-label">7-Day & 14-Day Duty</div>
+          <div class="sim-metric-val" id="modalDuty7Info" style="font-size:13.5px;">--</div>
+        </div>
+      </div>
+
+      <div class="card-title" style="font-size:13px;margin-bottom:8px;">Sector Breakdown</div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Sector</th>
+              <th>Out (UTC)</th>
+              <th>In (UTC)</th>
+              <th>Block</th>
+              <th>A/C</th>
+              <th>Reg</th>
+              <th>PIC / Details</th>
+            </tr>
+          </thead>
+          <tbody id="modalSectorsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Scripts -->
+  <script src="./js/ftl_rules.js"></script>
+  <script src="./js/storage.js"></script>
+  <script src="./js/ecrew_parser.js"></script>
+  <script src="./js/simulator.js"></script>
+  <script src="./js/app.js"></script>
+
+  <!-- PWA Service Worker Registration & Mobile Tab Sync -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
+          .catch(err => console.error('[PWA] Service Worker registration failed:', err));
+      });
+    }
+
+    // Sync Bottom Mobile Navigation with Desktop Navigation
+    document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-tab');
+        document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        document.querySelectorAll('.nav-tab').forEach(t => {
+          if (t.getAttribute('data-tab') === targetId) t.classList.add('active');
+          else t.classList.remove('active');
+        });
+
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        const targetContent = document.getElementById(targetId);
+        if (targetContent) targetContent.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
+  </script>
+</body>
+</html>
