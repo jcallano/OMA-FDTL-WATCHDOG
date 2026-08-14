@@ -526,6 +526,11 @@ document.addEventListener('DOMContentLoaded', () => {
         <td class="mono">${chkStr} UTC</td>
         <td class="mono">${FTLRules.formatMinutesToHM(d.fdpDurationMinutes)} <span style="color:var(--text-muted);font-size:11px;">/ ${d.isSimulator ? 'N/A' : FTLRules.formatMinutesToHM(d.maxFdpMinutes)}</span></td>
         <td class="mono">${d.precedingRestMinutes !== null ? FTLRules.formatMinutesToHM(d.precedingRestMinutes) : 'Start'}</td>
+        <td class="mono">
+          <span style="font-weight:700;color:${d.consecutiveDutyDays >= 7 ? 'var(--danger)' : (d.consecutiveDutyDays >= 6 ? 'var(--warning)' : 'var(--text-primary)')};">
+            Day ${d.consecutiveDutyDays || 1}/7
+          </span>
+        </td>
         <td class="mono">${FTLRules.formatMinutesToHM(d.flightTime28dMinutes)}</td>
         <td class="mono">${FTLRules.formatMinutesToHM(d.dutyTime7dMinutes)}</td>
         <td>${badgeHtml}</td>
@@ -535,26 +540,36 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function showHoverCard(e, d) {
-    if (!hoverCard || window.innerWidth < 900) return;
+    if (!hoverCard) return;
     const isPast = d.checkoutTimeUtc.getTime() <= new Date().getTime();
+    const consecDays = d.consecutiveDutyDays || 1;
+    const daysOffNeeded = Math.max(0, 7 - consecDays);
     
     let content = `
-      <div style="font-weight:700;margin-bottom:6px;color:#fff;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:4px;display:flex;justify-content:space-between;">
+      <div style="font-weight:700;margin-bottom:6px;color:#fff;border-bottom:1px solid rgba(255,255,255,0.15);padding-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
         <span>Duty #${d.dutyId} • ${d.summaryRoute}</span>
-        <span style="font-size:10.5px;color:${isPast ? '#10b981' : '#a855f7'};">${isPast ? 'COMPLETED' : 'ROSTERED'}</span>
+        <span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${isPast ? 'rgba(16,185,129,0.2)' : 'rgba(168,85,247,0.2)'};color:${isPast ? '#10b981' : '#c084fc'};">${isPast ? 'COMPLETED' : 'ROSTERED'}</span>
       </div>
-      <div><strong>FDP:</strong> ${FTLRules.formatMinutesToHM(d.fdpDurationMinutes)} (Max: ${d.isSimulator ? 'N/A' : FTLRules.formatMinutesToHM(d.maxFdpMinutes)})</div>
-      <div><strong>FDP Margin:</strong> <span style="color:${d.fdpMarginMinutes < 0 ? '#ef4444' : '#10b981'};">${d.isSimulator ? 'N/A' : FTLRules.formatMinutesToHM(d.fdpMarginMinutes)}</span></div>
-      <div><strong>Preceding Rest:</strong> ${d.precedingRestMinutes !== null ? FTLRules.formatMinutesToHM(d.precedingRestMinutes) : 'N/A'} (Req: ${d.requiredRestMinutes ? FTLRules.formatMinutesToHM(d.requiredRestMinutes) : '12h'})</div>
-      <div style="margin-top:4px;padding-top:4px;border-top:1px dashed rgba(255,255,255,0.1);">
-        <strong>Cumulative at this point:</strong>
-        <div>• 28d Flight: <strong>${FTLRules.formatMinutesToHM(d.flightTime28dMinutes)}</strong> / 100h</div>
-        <div>• 7d Duty: <strong>${FTLRules.formatMinutesToHM(d.dutyTime7dMinutes)}</strong> / 55h</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+        <div><strong>FDP:</strong> ${FTLRules.formatMinutesToHM(d.fdpDurationMinutes)}</div>
+        <div><strong>Max FDP:</strong> ${d.isSimulator ? 'N/A' : FTLRules.formatMinutesToHM(d.maxFdpMinutes)}</div>
+        <div><strong>Margin:</strong> <span style="color:${d.fdpMarginMinutes < 0 ? '#ef4444' : '#10b981'};font-weight:700;">${d.isSimulator ? 'N/A' : FTLRules.formatMinutesToHM(d.fdpMarginMinutes)}</span></div>
+        <div><strong>Preceding Rest:</strong> ${d.precedingRestMinutes !== null ? FTLRules.formatMinutesToHM(d.precedingRestMinutes) : 'N/A'}</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.05);padding:6px 8px;border-radius:6px;margin-bottom:6px;">
+        <div style="color:${consecDays >= 7 ? '#ef4444' : (consecDays >= 6 ? '#f59e0b' : '#38bdf8')};font-weight:700;">
+          🗓️ Consecutive Duty: Day ${consecDays} of 7 Max (OM-A 7.1.5)
+        </div>
+        <div style="font-size:11px;color:#94a3b8;">${consecDays >= 7 ? '🛑 Statutory Days Off REQUIRED after this duty' : `${daysOffNeeded} day(s) remaining until required days off`}</div>
+      </div>
+      <div style="padding-top:4px;border-top:1px dashed rgba(255,255,255,0.1);font-size:11.5px;color:#cbd5e1;">
+        <div>• 28-Day Flight: <strong>${FTLRules.formatMinutesToHM(d.flightTime28dMinutes)}</strong> / 100h</div>
+        <div>• 7-Day Duty: <strong>${FTLRules.formatMinutesToHM(d.dutyTime7dMinutes)}</strong> / 55h</div>
       </div>
     `;
 
     if (d.violations && d.violations.length > 0) {
-      content += `<div style="color:#f87171;margin-top:4px;font-size:11px;">⚠️ ${d.violations[0].title}</div>`;
+      content += `<div style="color:#f87171;margin-top:6px;font-size:11px;background:rgba(239,68,68,0.15);padding:4px 6px;border-radius:4px;">⚠️ ${d.violations[0].title}</div>`;
     }
 
     hoverCard.innerHTML = content;
@@ -564,10 +579,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function positionHoverCard(e) {
     if (!hoverCard || hoverCard.style.display !== 'block') return;
-    const x = e.pageX + 15;
-    const y = e.pageY + 15;
-    hoverCard.style.left = `${Math.min(x, window.innerWidth - 320)}px`;
-    hoverCard.style.top = `${y}px`;
+    const x = e.clientX + 15;
+    const y = e.clientY + 15;
+    const cardWidth = 320;
+    const cardHeight = hoverCard.offsetHeight || 220;
+
+    // Boundary protection for screen edges
+    const posX = (x + cardWidth > window.innerWidth) ? (e.clientX - cardWidth - 10) : x;
+    const posY = (y + cardHeight > window.innerHeight) ? (e.clientY - cardHeight - 10) : y;
+
+    hoverCard.style.left = `${Math.max(10, posX)}px`;
+    hoverCard.style.top = `${Math.max(10, posY)}px`;
+    hoverCard.style.position = 'fixed';
   }
 
   function hideHoverCard() {

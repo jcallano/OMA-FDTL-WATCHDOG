@@ -4,7 +4,7 @@
  * Regulations valid as of August 2026
  */
 
-const CACHE_NAME = 'oman-air-ftl-v1.2.0'; // Incremented to bust previous caches
+const CACHE_NAME = 'oman-air-ftl-v1.2.1'; // Incremented for hover card & duty days update
 const STATIC_ASSETS = [
   './',
   './index.html',
