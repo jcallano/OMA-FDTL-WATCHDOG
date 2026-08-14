@@ -28,6 +28,9 @@
   
   --info: #0ea5e9;
   --info-bg: rgba(14, 165, 233, 0.14);
+  --scheduled: #a855f7;
+  --scheduled-bg: rgba(168, 85, 247, 0.14);
+  --scheduled-border: rgba(168, 85, 247, 0.35);
   
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -402,10 +405,12 @@ body {
 .color-ok { color: var(--success); }
 .color-warning { color: var(--warning); }
 .color-danger { color: var(--danger); }
+.color-scheduled { color: var(--scheduled); }
 
 .bg-ok { background: var(--success); }
 .bg-warning { background: var(--warning); }
 .bg-danger { background: var(--danger); }
+.bg-scheduled { background: var(--scheduled); }
 
 .simulator-layout {
   display: grid;
@@ -618,13 +623,20 @@ body {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--border);
   color: var(--text-primary);
-  padding: 10px 16px;
+  padding: 8px 14px;
   border-radius: var(--radius-md);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  min-height: 40px;
+  min-height: 38px;
+  transition: background 0.15s ease;
+}
+
+.btn-secondary.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
 }
 
 .table-responsive {
@@ -659,6 +671,23 @@ tr:hover td, tr:active td {
   background: rgba(255, 255, 255, 0.03);
 }
 
+/* Today / Scheduled Divider Rows */
+.tr-today-divider td {
+  background: rgba(99, 102, 241, 0.15) !important;
+  color: #c7d2fe;
+  font-weight: 700;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--primary);
+  border-bottom: 1px solid var(--primary);
+}
+
+.row-scheduled td {
+  background: rgba(168, 85, 247, 0.03);
+}
+
 .badge {
   padding: 3px 7px;
   border-radius: 5px;
@@ -674,24 +703,28 @@ tr:hover td, tr:active td {
 .badge-legal { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); }
 .badge-warning { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); }
 .badge-illegal { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
+.badge-scheduled { background: var(--scheduled-bg); color: var(--scheduled); border: 1px solid var(--scheduled-border); }
 .badge-sim { background: var(--info-bg); color: var(--info); }
 
-.dropzone {
-  border: 2px dashed rgba(99, 102, 241, 0.4);
-  background: rgba(99, 102, 241, 0.04);
-  border-radius: var(--radius-lg);
-  padding: 30px 16px;
-  text-align: center;
-  cursor: pointer;
-  margin-bottom: 16px;
+/* Quick Hover Tooltip for Desktop */
+.quick-hover-card {
+  position: absolute;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+  z-index: 950;
+  pointer-events: none;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 300px;
+  display: none;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-.dropzone-icon {
-  font-size: 36px;
-  color: var(--primary);
-  margin-bottom: 8px;
-}
-
+/* Modal Bottom Sheet */
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -705,6 +738,13 @@ tr:hover td, tr:active td {
   padding: 12px;
 }
 
+@media (max-width: 600px) {
+  .modal-overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+}
+
 .modal-card {
   background: #0f172a;
   border: 1px solid var(--border);
@@ -715,6 +755,15 @@ tr:hover td, tr:active td {
   overflow-y: auto;
   padding: 20px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+}
+
+@media (max-width: 600px) {
+  .modal-card {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    max-height: 90vh;
+    padding-bottom: calc(var(--sab) + 20px);
+  }
 }
 
 .modal-header {

@@ -285,10 +285,11 @@
         <!-- Filters & Search -->
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;justify-content:space-between;align-items:center;">
           <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;">
-            <button class="btn-secondary btn-filter active" data-status="ALL" style="padding:4px 10px;font-size:11.5px;">All</button>
-            <button class="btn-secondary btn-filter" data-status="VIOLATION" style="padding:4px 10px;font-size:11.5px;">Violations</button>
-            <button class="btn-secondary btn-filter" data-status="WARNING" style="padding:4px 10px;font-size:11.5px;">Tight</button>
-            <button class="btn-secondary btn-filter" data-status="OK" style="padding:4px 10px;font-size:11.5px;">Legal</button>
+            <button class="btn-secondary btn-filter active" data-status="ALL">All Timeline</button>
+            <button class="btn-secondary btn-filter" data-status="UPCOMING" style="color:var(--scheduled);">🟣 Upcoming Roster</button>
+            <button class="btn-secondary btn-filter" data-status="COMPLETED" style="color:var(--success);">🔵 Completed</button>
+            <button class="btn-secondary btn-filter" data-status="VIOLATION" style="color:var(--danger);">🔴 Violations</button>
+            <button class="btn-secondary btn-filter" data-status="WARNING" style="color:var(--warning);">🟡 Tight Margin</button>
           </div>
           <div style="width:100%;max-width:240px;">
             <input type="text" id="logbookSearch" class="form-control" placeholder="Search route, date..." style="padding:6px 10px;font-size:12.5px;">

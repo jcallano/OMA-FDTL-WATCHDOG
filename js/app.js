@@ -1,5 +1,6 @@
 /**
  * Main Application UI Controller for Oman Air FTL PWA
+ * Features: Roster Schedule vs Completed Tracking, Hover Cards & Bottom Sheet Inspector
  * Regulations valid as of August 2026
  */
 
@@ -9,10 +10,12 @@ document.addEventListener('DOMContentLoaded', () => {
   let searchQuery = '';
   let trendChartInstance = null;
   let deferredInstallPrompt = null;
+  let hoverCard = null;
 
   initApp();
 
   function initApp() {
+    createQuickHoverCard();
     setupTabNavigation();
     setupPwaInstall();
     setupSimulator();
@@ -22,6 +25,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     allDuties = FTLStorage.getDuties();
     refreshAllViews();
+  }
+
+  function createQuickHoverCard() {
+    hoverCard = document.createElement('div');
+    hoverCard.id = 'quickHoverCard';
+    hoverCard.className = 'quick-hover-card';
+    document.body.appendChild(hoverCard);
   }
 
   function setupTabNavigation() {
@@ -107,8 +117,11 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const latestDuty = allDuties[allDuties.length - 1];
-    
+    const now = new Date();
+    const completedDuties = allDuties.filter(d => d.checkoutTimeUtc.getTime() <= now.getTime());
+    const upcomingDuties = allDuties.filter(d => d.checkoutTimeUtc.getTime() > now.getTime());
+    const latestDuty = completedDuties.length > 0 ? completedDuties[completedDuties.length - 1] : allDuties[allDuties.length - 1];
+
     const flt28 = latestDuty.flightTime28dMinutes || 0;
     const flt28Hours = (flt28 / 60).toFixed(1);
     const flt28Percent = Math.min(Math.round((flt28 / FTLRules.LIMITS.MAX_FLIGHT_28D) * 100), 100);
@@ -153,10 +166,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('dashConsecValue').innerText = `${consec} Days`;
     document.getElementById('dashConsecSub').innerText = `${Math.max(0, 7 - consec)} days until required day off`;
 
+    const upcomingHazards = upcomingDuties.filter(d => d.status === 'VIOLATION' || d.status === 'WARNING').length;
     const violCount = allDuties.filter(d => d.status === 'VIOLATION').length;
     const warnCount = allDuties.filter(d => d.status === 'WARNING').length;
-    document.getElementById('dashViolationsBadge').innerText = `${violCount} Violations / ${warnCount} Warnings`;
-    document.getElementById('dashTotalDutiesBadge').innerText = `${allDuties.length} Recorded Duties`;
+
+    let badgeText = `${violCount} Violations / ${warnCount} Warnings`;
+    if (upcomingHazards > 0) {
+      badgeText += ` (${upcomingHazards} Upcoming in Roster)`;
+    }
+    document.getElementById('dashViolationsBadge').innerText = badgeText;
+    document.getElementById('dashTotalDutiesBadge').innerText = `${completedDuties.length} Completed | ${upcomingDuties.length} Rostered`;
 
     renderTrendChart();
   }
@@ -246,11 +265,11 @@ document.addEventListener('DOMContentLoaded', () => {
       btnCommit.addEventListener('click', () => {
         const draftEvaluation = getSimulatorDraftEvaluation();
         if (draftEvaluation && draftEvaluation.draftDutyObj) {
-          allDuties.push(draftEvaluation.draftDutyObj);
-          allDuties = eCrewParser.recalculateDutiesAnalysis(allDuties);
+          const mergeResult = eCrewParser.mergeSectors(allDuties, draftEvaluation.draftDutyObj.sectors);
+          allDuties = mergeResult.duties;
           FTLStorage.saveDuties(allDuties);
           refreshAllViews();
-          alert('Assignment successfully committed to your Flight Logbook!');
+          alert('Flight successfully committed to your logbook & FTL limits updated!');
           switchTab('tab-logbook');
         }
       });
@@ -428,22 +447,70 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!tbody) return;
     tbody.innerHTML = '';
 
+    const now = new Date();
+
     const filtered = allDuties.filter(d => {
-      const matchesFilter = (currentFilter === 'ALL') || (d.status === currentFilter);
+      const isPast = d.checkoutTimeUtc.getTime() <= now.getTime();
+      let matchesFilter = true;
+
+      if (currentFilter === 'UPCOMING') {
+        matchesFilter = !isPast;
+      } else if (currentFilter === 'COMPLETED') {
+        matchesFilter = isPast;
+      } else if (currentFilter === 'VIOLATION') {
+        matchesFilter = (d.status === 'VIOLATION');
+      } else if (currentFilter === 'WARNING') {
+        matchesFilter = (d.status === 'WARNING');
+      } else if (currentFilter === 'OK') {
+        matchesFilter = (d.status === 'OK');
+      }
+
       const dateStr = d.firstDepUtc ? d.firstDepUtc.toISOString().slice(0,10) : '';
       const routeStr = d.summaryRoute || '';
       const matchesSearch = !searchQuery || dateStr.includes(searchQuery) || routeStr.toLowerCase().includes(searchQuery);
       return matchesFilter && matchesSearch;
     });
 
-    filtered.forEach(d => {
+    let dividerInserted = false;
+
+    filtered.forEach((d, idx) => {
+      const isPast = d.checkoutTimeUtc.getTime() <= now.getTime();
+
+      // Insert visual TODAY line when transitioning from past to upcoming
+      if (!dividerInserted && currentFilter === 'ALL' && !isPast && idx > 0) {
+        const dividerTr = document.createElement('tr');
+        dividerTr.className = 'tr-today-divider';
+        dividerTr.innerHTML = `
+          <td colspan="10" style="text-align:center;">
+            📍 TODAY • ${now.toISOString().slice(0,10)} (Upcoming Rostered Duties Below &darr;)
+          </td>
+        `;
+        tbody.appendChild(dividerTr);
+        dividerInserted = true;
+      }
+
       const tr = document.createElement('tr');
+      tr.className = isPast ? 'row-past' : 'row-scheduled';
       tr.style.cursor = 'pointer';
+
+      // Desktop Hover Events
+      tr.addEventListener('mouseenter', (e) => showHoverCard(e, d));
+      tr.addEventListener('mousemove', (e) => positionHoverCard(e));
+      tr.addEventListener('mouseleave', hideHoverCard);
+
+      // Tap to open full Inspector Bottom Sheet
       tr.addEventListener('click', () => openDutyModal(d.dutyId));
 
-      let badgeHtml = '<span class="badge badge-legal">Legal</span>';
-      if (d.status === 'VIOLATION') badgeHtml = '<span class="badge badge-illegal">Violation</span>';
-      else if (d.status === 'WARNING') badgeHtml = '<span class="badge badge-warning">Tight</span>';
+      let badgeHtml = '';
+      if (!isPast) {
+        if (d.status === 'VIOLATION') badgeHtml = '<span class="badge badge-illegal">⚠️ Illegal Roster</span>';
+        else if (d.status === 'WARNING') badgeHtml = '<span class="badge badge-warning">⚡ Tight Roster</span>';
+        else badgeHtml = '<span class="badge badge-scheduled">Rostered</span>';
+      } else {
+        if (d.status === 'VIOLATION') badgeHtml = '<span class="badge badge-illegal">Violation</span>';
+        else if (d.status === 'WARNING') badgeHtml = '<span class="badge badge-warning">Tight</span>';
+        else badgeHtml = '<span class="badge badge-legal">Legal</span>';
+      }
 
       if (d.isSimulator) badgeHtml += ' <span class="badge badge-sim">SIM</span>';
 
@@ -467,11 +534,53 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function showHoverCard(e, d) {
+    if (!hoverCard || window.innerWidth < 900) return;
+    const isPast = d.checkoutTimeUtc.getTime() <= new Date().getTime();
+    
+    let content = `
+      <div style="font-weight:700;margin-bottom:6px;color:#fff;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:4px;display:flex;justify-content:space-between;">
+        <span>Duty #${d.dutyId} • ${d.summaryRoute}</span>
+        <span style="font-size:10.5px;color:${isPast ? '#10b981' : '#a855f7'};">${isPast ? 'COMPLETED' : 'ROSTERED'}</span>
+      </div>
+      <div><strong>FDP:</strong> ${FTLRules.formatMinutesToHM(d.fdpDurationMinutes)} (Max: ${d.isSimulator ? 'N/A' : FTLRules.formatMinutesToHM(d.maxFdpMinutes)})</div>
+      <div><strong>FDP Margin:</strong> <span style="color:${d.fdpMarginMinutes < 0 ? '#ef4444' : '#10b981'};">${d.isSimulator ? 'N/A' : FTLRules.formatMinutesToHM(d.fdpMarginMinutes)}</span></div>
+      <div><strong>Preceding Rest:</strong> ${d.precedingRestMinutes !== null ? FTLRules.formatMinutesToHM(d.precedingRestMinutes) : 'N/A'} (Req: ${d.requiredRestMinutes ? FTLRules.formatMinutesToHM(d.requiredRestMinutes) : '12h'})</div>
+      <div style="margin-top:4px;padding-top:4px;border-top:1px dashed rgba(255,255,255,0.1);">
+        <strong>Cumulative at this point:</strong>
+        <div>• 28d Flight: <strong>${FTLRules.formatMinutesToHM(d.flightTime28dMinutes)}</strong> / 100h</div>
+        <div>• 7d Duty: <strong>${FTLRules.formatMinutesToHM(d.dutyTime7dMinutes)}</strong> / 55h</div>
+      </div>
+    `;
+
+    if (d.violations && d.violations.length > 0) {
+      content += `<div style="color:#f87171;margin-top:4px;font-size:11px;">⚠️ ${d.violations[0].title}</div>`;
+    }
+
+    hoverCard.innerHTML = content;
+    hoverCard.style.display = 'block';
+    positionHoverCard(e);
+  }
+
+  function positionHoverCard(e) {
+    if (!hoverCard || hoverCard.style.display !== 'block') return;
+    const x = e.pageX + 15;
+    const y = e.pageY + 15;
+    hoverCard.style.left = `${Math.min(x, window.innerWidth - 320)}px`;
+    hoverCard.style.top = `${y}px`;
+  }
+
+  function hideHoverCard() {
+    if (hoverCard) hoverCard.style.display = 'none';
+  }
+
   function openDutyModal(dutyId) {
+    hideHoverCard();
     const d = allDuties.find(item => item.dutyId === dutyId);
     if (!d) return;
 
-    document.getElementById('modalTitle').innerText = `Duty #${d.dutyId} - ${d.summaryRoute}`;
+    const isPast = d.checkoutTimeUtc.getTime() <= new Date().getTime();
+    document.getElementById('modalTitle').innerText = `Duty #${d.dutyId} - ${d.summaryRoute} (${isPast ? 'Completed' : 'Upcoming Roster'})`;
     document.getElementById('modalSubtitle').innerText = `${d.firstDepUtc ? d.firstDepUtc.toISOString().slice(0,10) : ''} | Report: ${d.reportTimeUtc ? d.reportTimeUtc.toISOString().slice(11,16) : ''} UTC -> Checkout: ${d.checkoutTimeUtc ? d.checkoutTimeUtc.toISOString().slice(11,16) : ''} UTC`;
 
     const alertsDiv = document.getElementById('modalAlerts');
@@ -506,7 +615,42 @@ document.addEventListener('DOMContentLoaded', () => {
       sectorsBody.appendChild(tr);
     });
 
+    // Add Action to test in simulator
+    let simBtn = document.getElementById('btnTestInSim');
+    if (!simBtn) {
+      simBtn = document.createElement('button');
+      simBtn.id = 'btnTestInSim';
+      simBtn.className = 'btn-primary';
+      simBtn.style.width = '100%';
+      simBtn.style.marginTop = '16px';
+      simBtn.innerHTML = '<span>⚡</span> Test / Modify this Duty in Simulator';
+      document.querySelector('.modal-card').appendChild(simBtn);
+    }
+
+    simBtn.onclick = () => {
+      closeModal();
+      loadDutyIntoSimulator(d);
+      switchTab('tab-simulator');
+    };
+
     document.getElementById('modalOverlay').style.display = 'flex';
+  }
+
+  function loadDutyIntoSimulator(duty) {
+    const simDateInput = document.getElementById('simDate');
+    if (simDateInput && duty.firstDepUtc) {
+      simDateInput.value = duty.firstDepUtc.toISOString().slice(0,10);
+    }
+    const container = document.getElementById('simSectorsContainer');
+    container.innerHTML = '';
+
+    duty.sectors.forEach((s, idx) => {
+      const depTime = s.depTimeUtc ? s.depTimeUtc.toISOString().slice(11,16) : '04:00';
+      const arrTime = s.arrTimeUtc ? s.arrTimeUtc.toISOString().slice(11,16) : '05:00';
+      addSectorRow(s.depAirport, s.arrAirport, depTime, arrTime);
+    });
+
+    runSimulatorEvaluation();
   }
 
   function closeModal() {
@@ -566,7 +710,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Smart Merge: updates existing overlapping sectors & appends new ones
     const mergeResult = eCrewParser.mergeSectors(allDuties, newSectors);
     allDuties = mergeResult.duties;
     FTLStorage.saveDuties(allDuties);
